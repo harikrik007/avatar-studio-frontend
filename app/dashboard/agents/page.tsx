@@ -686,6 +686,8 @@ function AgentDialog({
             &times;
           </button>
 
+          <div className="l-agent-dialog-split">
+          <div className="l-agent-dialog-media">
           {testing ? (
             <LiveTestPanel agentId={agent.id} onStopped={() => setTesting(false)} />
           ) : avatar?.preview_video_url ? (
@@ -700,8 +702,9 @@ function AgentDialog({
           ) : (
             <DialogPlaceholder name={avatar?.name ?? agent.name} />
           )}
+          </div>
 
-          <div className="l-avatar-dialog-body">
+          <div className="l-avatar-dialog-body l-agent-dialog-config">
             <div className="l-avatar-dialog-header">
               <h2>{agent.name}</h2>
               <span className={`l-status-badge ${agent.status === "live" ? "l-status-ready" : "l-status-uploading"}`}>
@@ -762,6 +765,7 @@ function AgentDialog({
             <button type="button" className="l-btn-delete l-dialog-delete" onClick={handleDelete}>
               Delete agent
             </button>
+          </div>
           </div>
         </>
       ) : null}

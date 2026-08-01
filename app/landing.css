@@ -123,10 +123,17 @@
 
 /* Dashboard nav: full-bleed, and the brand sits in the sidebar's own gutter
    so the rail, the brand, and the centred content column all agree. */
+/* Pinned, along with the sidebar below it, so the dashboard chrome stays put
+   while only the content column scrolls. Needs its own background: once it
+   stops scrolling away, content passes underneath it. */
 .landing .l-nav-dash {
   max-width: none;
   padding: 18px 24px;
   border-bottom: 1px solid var(--l-border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--l-bg);
 }
 
 .landing .l-brand {
@@ -1115,7 +1122,18 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--l-border);
-  min-height: calc(100vh - var(--l-nav-h));
+  /* Sticks under the nav instead of scrolling away with the content.
+     A fixed `height` (not min-height) is what makes this work: the rail has
+     to be viewport-tall, not content-tall, or there is nothing for sticky to
+     hold in place. `align-items: flex-start` on .l-dash-layout is load-bearing
+     for the same reason -- the default `stretch` would size the rail to the
+     full content height and sticky would never engage. */
+  position: sticky;
+  top: var(--l-nav-h);
+  height: calc(100vh - var(--l-nav-h));
+  /* A short viewport (or enough nav items) must not clip the account block
+     pinned at the bottom. */
+  overflow-y: auto;
 }
 
 .landing .l-sidebar-nav {
@@ -1265,10 +1283,77 @@
   flex-wrap: wrap;
 }
 
-/* --- agent detail dialog: taller, scrolls its own content --- */
+/* --- agent detail dialog: two panes, avatar left / config right ---
+   Stacked vertically this dialog pushed the avatar off-screen the moment you
+   scrolled to the tools, which is exactly when you most want to see who you
+   are configuring. Splitting it keeps the avatar in view and gives the long
+   config form its own scroll container. */
 
-.landing dialog.l-agent-dialog {
-  max-height: min(820px, calc(100vh - 48px));
+/* Both classes in the selector on purpose: .l-avatar-dialog is defined later
+   in this file and, at equal specificity, its narrower `width: min(560px…)`
+   would win and squeeze the config pane to a couple hundred pixels. */
+.landing dialog.l-avatar-dialog.l-agent-dialog {
+  width: min(940px, calc(100vw - 48px));
+  /* A fixed height, not max-height: the two panes have to agree on how tall
+     they are, or the media rail ends at the bottom of the video and the
+     divider stops halfway down the dialog. */
+  height: min(780px, calc(100vh - 48px));
+  max-height: none;
+  /* Only the config pane scrolls -- the dialog itself must not, or the
+     avatar scrolls away again. */
+  overflow: hidden;
+}
+
+.landing .l-agent-dialog-split {
+  display: flex;
+  align-items: stretch;
+  height: 100%;
+}
+
+.landing .l-agent-dialog-media {
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--l-border);
+  background: var(--l-bg);
+  overflow: hidden;
+}
+
+.landing .l-agent-dialog-config {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* Fill the pane rather than keeping the square crop: at 1/1 the preview left
+   a tall band of dead background beneath it, which grows with the viewport. */
+.landing .l-agent-dialog-media .l-avatar-dialog-video,
+.landing .l-agent-dialog-media .l-avatar-dialog-placeholder {
+  height: 100%;
+  aspect-ratio: auto;
+  object-fit: cover;
+}
+
+/* The close button is pinned to the dialog's top-right corner, which is over
+   this pane's header -- without the gutter it sits on top of the status
+   badge. */
+.landing .l-agent-dialog-config .l-avatar-dialog-header {
+  padding-right: 34px;
+}
+
+/* The live test panel becomes the whole left pane while testing. */
+.landing .l-agent-dialog-media .l-live-test {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.landing .l-agent-dialog-media .l-live-test-video-wrap {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: auto;
 }
 
 /* --- live test panel: replaces the static preview video while testing --- */
@@ -1473,6 +1558,33 @@
     flex-direction: column;
   }
 
+  /* Two panes side by side need width this screen doesn't have -- fall back
+     to the stacked layout, avatar on top. */
+  .landing dialog.l-avatar-dialog.l-agent-dialog {
+    height: min(780px, calc(100vh - 48px));
+  }
+
+  .landing .l-agent-dialog-split {
+    flex-direction: column;
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .landing .l-agent-dialog-media {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--l-border);
+  }
+
+  .landing .l-agent-dialog-config {
+    overflow-y: visible;
+  }
+
+  .landing .l-agent-dialog-media .l-live-test-video-wrap {
+    flex: none;
+    aspect-ratio: 1 / 1;
+  }
+
   .landing .l-sidebar {
     width: 100%;
     flex-direction: row;
@@ -1482,6 +1594,12 @@
     border-bottom: 1px solid var(--l-border);
     padding: 10px 16px;
     gap: 8px;
+    /* Undo the desktop sticky rail: as a horizontal bar it has no viewport
+       height to hold, and pinning it here would eat scarce vertical space on
+       the screens that have the least of it. */
+    position: static;
+    height: auto;
+    overflow-y: visible;
   }
 
   /* The rail becomes a top bar on mobile: links left, account right. */
