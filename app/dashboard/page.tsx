@@ -144,7 +144,8 @@ export default function DashboardPage() {
 
 function AvatarRow({ avatar, onDeleted }: { avatar: Avatar; onDeleted: () => void }) {
   const [deleting, setDeleting] = useState(false);
-  const failedChecks = avatar.quality_report_json?.checks.filter((c) => !c.passed) ?? [];
+  const [expanded, setExpanded] = useState(false);
+  const checks = avatar.quality_report_json?.checks ?? [];
 
   async function handleDelete() {
     if (!window.confirm(`Delete "${avatar.name}"? This removes it and its stored video permanently.`)) {
@@ -174,17 +175,26 @@ function AvatarRow({ avatar, onDeleted }: { avatar: Avatar; onDeleted: () => voi
         ) : (
           <div className="avatar-thumb" />
         )}
-        <div>
+        <div className="avatar-info">
           <div className="avatar-name">{avatar.name}</div>
           <div className="avatar-meta">{new Date(avatar.created_at).toLocaleString()}</div>
           {avatar.status === "failed" && avatar.status_detail ? (
             <div className="quality-detail">{avatar.status_detail}</div>
           ) : null}
-          {avatar.status === "failed" && failedChecks.length > 1 ? (
+          {checks.length > 0 ? (
+            <button
+              type="button"
+              className="button-expand"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "Hide" : "Show"} quality checks ({checks.length})
+            </button>
+          ) : null}
+          {expanded ? (
             <ul className="quality-check-list">
-              {failedChecks.map((c) => (
-                <li key={c.name} className={c.advisory ? "advisory" : undefined}>
-                  {c.name}
+              {checks.map((c) => (
+                <li key={c.name} className={c.passed ? "check-pass" : c.advisory ? "advisory" : "check-fail"}>
+                  {c.passed ? "✓" : c.advisory ? "!" : "✗"} {c.name}
                   {c.advisory ? " (advisory)" : ""}: {c.detail}
                 </li>
               ))}
