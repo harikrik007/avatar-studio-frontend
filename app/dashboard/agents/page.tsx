@@ -637,7 +637,12 @@ function CreateAgentForm({
 
 type ActivityEntry =
   | { id: string; kind: "transcript"; role: "user" | "assistant"; text: string }
-  | { id: string; kind: "tool"; name: string; status: "calling" | "done" | "failed" };
+  // `detail` carries the tool's own error text. Without it the feed only
+  // said "failed", which tells you a tool broke but not whether the URL
+  // was wrong, the API rejected the request, or it timed out -- and the
+  // session's logs are deleted on teardown, so there is nowhere else to
+  // look afterwards.
+  | { id: string; kind: "tool"; name: string; status: "calling" | "done" | "failed"; detail?: string };
 
 type TestState = "idle" | "connecting" | "connected" | "error";
 
@@ -728,11 +733,22 @@ function LiveTestPanel({
           } else if (msg.type === "tool_call") {
             pushActivity({ id: msg.id, kind: "tool", name: msg.name, status: "calling" });
           } else if (msg.type === "tool_result") {
+            const failed = msg.response?.success === false;
+            // HTTP failures carry the upstream body too -- it is usually
+            // the most informative part (an API's own "invalid key" or
+            // "unknown city" message), so include a trimmed slice of it.
+            const detail = failed
+              ? [msg.response?.error, typeof msg.response?.body === "string" ? msg.response.body : null]
+                  .filter(Boolean)
+                  .join(" — ")
+                  .slice(0, 200)
+              : undefined;
             pushActivity({
               id: msg.id,
               kind: "tool",
               name: msg.name,
-              status: msg.response?.success === false ? "failed" : "done",
+              status: failed ? "failed" : "done",
+              detail,
             });
           }
         } catch {
@@ -816,8 +832,17 @@ function LiveTestPanel({
                 <strong>{e.role === "user" ? "You" : "Agent"}:</strong> {e.text}
               </div>
             ) : (
-              <div key={e.id} className="l-live-test-line l-live-test-tool">
-                {e.status === "calling" ? `Calling ${e.name}…` : e.status === "done" ? `${e.name} responded` : `${e.name} failed`}
+              <div
+                key={e.id}
+                className={`l-live-test-line l-live-test-tool${
+                  e.status === "failed" ? " l-live-test-tool-failed" : ""
+                }`}
+              >
+                {e.status === "calling"
+                  ? `Calling ${e.name}…`
+                  : e.status === "done"
+                    ? `${e.name} responded`
+                    : `${e.name} failed${e.detail ? `: ${e.detail}` : ""}`}
               </div>
             )
           )}

@@ -1487,6 +1487,14 @@
   font-style: italic;
 }
 
+/* A failed tool call is the one line in this feed the user has to act on,
+   so it does not get to look like the rest of the muted chatter. */
+.landing .l-live-test-tool-failed {
+  color: #ff9d9d;
+  font-style: normal;
+  word-break: break-word;
+}
+
 /* --- avatar detail dialog --- */
 
 .landing dialog.l-avatar-dialog {
