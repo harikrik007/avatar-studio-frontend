@@ -22,6 +22,18 @@ export async function GET() {
     cache: "no-store",
   });
   const body = await res.json();
+
+  // Same rewrite as the single-avatar route: the backend's preview_video_url
+  // points at its own /static path, only reachable from this box -- without
+  // this, every avatar in the list silently fails to load its thumbnail.
+  if (Array.isArray(body)) {
+    for (const avatar of body) {
+      if (avatar.preview_video_url) {
+        avatar.preview_video_url = `/api/avatars/${avatar.id}/preview`;
+      }
+    }
+  }
+
   return NextResponse.json(body, { status: res.status });
 }
 

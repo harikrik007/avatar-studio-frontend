@@ -48,6 +48,7 @@ export default function DashboardPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState<Avatar | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -69,6 +70,15 @@ export default function DashboardPage() {
     const interval = setInterval(refresh, 3000);
     return () => clearInterval(interval);
   }, [avatars, refresh]);
+
+  // Keep the open dialog's data in sync with polling -- e.g. a processing
+  // avatar the user is looking at flips to ready without them having to
+  // close and reopen it.
+  useEffect(() => {
+    if (!selectedAvatar) return;
+    const fresh = avatars.find((a) => a.id === selectedAvatar.id);
+    if (fresh && fresh !== selectedAvatar) setSelectedAvatar(fresh);
+  }, [avatars, selectedAvatar]);
 
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
@@ -100,6 +110,18 @@ export default function DashboardPage() {
     setFile(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     void refresh();
+  }
+
+  async function handleDeleteSelected() {
+    if (!selectedAvatar) return;
+    if (!window.confirm(`Delete "${selectedAvatar.name}"? This removes it and its stored video permanently.`)) {
+      return;
+    }
+    const res = await fetch(`/api/avatars/${selectedAvatar.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setSelectedAvatar(null);
+      void refresh();
+    }
   }
 
   return (
@@ -191,87 +213,113 @@ export default function DashboardPage() {
         ) : (
           <div className="l-avatar-list">
             {avatars.map((avatar) => (
-              <AvatarRow key={avatar.id} avatar={avatar} onDeleted={refresh} />
+              <AvatarRow key={avatar.id} avatar={avatar} onOpen={() => setSelectedAvatar(avatar)} />
             ))}
           </div>
         )}
       </div>
+
+      <AvatarDialog avatar={selectedAvatar} onClose={() => setSelectedAvatar(null)} onDelete={handleDeleteSelected} />
     </main>
   );
 }
 
-function AvatarRow({ avatar, onDeleted }: { avatar: Avatar; onDeleted: () => void }) {
-  const [deleting, setDeleting] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const checks = avatar.quality_report_json?.checks ?? [];
-
-  async function handleDelete() {
-    if (!window.confirm(`Delete "${avatar.name}"? This removes it and its stored video permanently.`)) {
-      return;
-    }
-    setDeleting(true);
-    const res = await fetch(`/api/avatars/${avatar.id}`, { method: "DELETE" });
-    if (res.ok) {
-      onDeleted();
-    } else {
-      setDeleting(false);
-    }
-  }
-
+function AvatarRow({ avatar, onOpen }: { avatar: Avatar; onOpen: () => void }) {
   return (
-    <div className="l-avatar-row">
+    <button type="button" className="l-avatar-row" onClick={onOpen}>
       <div className="l-avatar-row-main">
         {avatar.status === "ready" && avatar.preview_video_url ? (
-          <video
-            className="l-avatar-thumb"
-            src={avatar.preview_video_url}
-            muted
-            loop
-            autoPlay
-            playsInline
-          />
+          <video className="l-avatar-thumb" src={avatar.preview_video_url} muted loop autoPlay playsInline />
         ) : (
           <div className="l-avatar-thumb" />
         )}
         <div className="l-avatar-info">
           <div className="l-avatar-name">{avatar.name}</div>
           <div className="l-avatar-meta">{new Date(avatar.created_at).toLocaleString()}</div>
-          {avatar.status === "failed" && avatar.status_detail ? (
-            <div className="l-quality-detail">{avatar.status_detail}</div>
-          ) : null}
-          {checks.length > 0 ? (
-            <button
-              type="button"
-              className="l-btn-expand"
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? "Hide" : "Show"} quality checks ({checks.length})
-            </button>
-          ) : null}
-          {expanded ? (
-            <ul className="l-quality-check-list">
-              {checks.map((c) => (
-                <li key={c.name} className={c.passed ? "l-check-pass" : c.advisory ? "l-advisory" : "l-check-fail"}>
-                  {c.passed ? "✓" : c.advisory ? "!" : "✗"} {c.name}
-                  {c.advisory ? " (advisory)" : ""}: {c.detail}
-                </li>
-              ))}
-            </ul>
-          ) : null}
         </div>
       </div>
-      <div className="l-avatar-row-actions">
-        <StatusBadge status={avatar.status} />
-        <button
-          type="button"
-          className="l-btn-delete"
-          onClick={handleDelete}
-          disabled={deleting}
-          aria-label={`Delete ${avatar.name}`}
-        >
-          {deleting ? "Deleting..." : "Delete"}
-        </button>
-      </div>
-    </div>
+      <StatusBadge status={avatar.status} />
+    </button>
+  );
+}
+
+function AvatarDialog({
+  avatar,
+  onClose,
+  onDelete,
+}: {
+  avatar: Avatar | null;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (avatar) {
+      if (!dialog.open) dialog.showModal();
+    } else {
+      dialog.close();
+      setExpanded(false);
+    }
+  }, [avatar]);
+
+  const checks = avatar?.quality_report_json?.checks ?? [];
+
+  return (
+    <dialog ref={dialogRef} className="l-avatar-dialog" onClose={onClose} onCancel={onClose}>
+      {avatar ? (
+        <>
+          <button type="button" className="l-dialog-close" onClick={onClose} aria-label="Close">
+            &times;
+          </button>
+          {avatar.status === "ready" && avatar.preview_video_url ? (
+            <video
+              className="l-avatar-dialog-video"
+              src={avatar.preview_video_url}
+              muted
+              loop
+              autoPlay
+              playsInline
+              controls
+            />
+          ) : (
+            <div className="l-avatar-dialog-video l-avatar-dialog-placeholder" />
+          )}
+          <div className="l-avatar-dialog-body">
+            <div className="l-avatar-dialog-header">
+              <h2>{avatar.name}</h2>
+              <StatusBadge status={avatar.status} />
+            </div>
+            <div className="l-avatar-meta">Created {new Date(avatar.created_at).toLocaleString()}</div>
+            {avatar.status === "failed" && avatar.status_detail ? (
+              <div className="l-quality-detail">{avatar.status_detail}</div>
+            ) : null}
+            {checks.length > 0 ? (
+              <>
+                <button type="button" className="l-btn-expand" onClick={() => setExpanded((v) => !v)}>
+                  {expanded ? "Hide" : "Show"} quality checks ({checks.length})
+                </button>
+                {expanded ? (
+                  <ul className="l-quality-check-list">
+                    {checks.map((c) => (
+                      <li key={c.name} className={c.passed ? "l-check-pass" : c.advisory ? "l-advisory" : "l-check-fail"}>
+                        {c.passed ? "✓" : c.advisory ? "!" : "✗"} {c.name}
+                        {c.advisory ? " (advisory)" : ""}: {c.detail}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
+            ) : null}
+            <button type="button" className="l-btn-delete l-dialog-delete" onClick={onDelete}>
+              Delete avatar
+            </button>
+          </div>
+        </>
+      ) : null}
+    </dialog>
   );
 }

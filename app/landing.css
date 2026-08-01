@@ -669,18 +669,27 @@
 
 .landing .l-avatar-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
+  width: 100%;
   padding: 18px;
   background: var(--l-bg-raised);
   border: 1px solid var(--l-border);
   border-radius: 14px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.landing .l-avatar-row:hover {
+  border-color: var(--l-accent);
 }
 
 .landing .l-avatar-row-main {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 14px;
   min-width: 0;
 }
@@ -753,12 +762,6 @@
   color: #fbbf24;
 }
 
-.landing .l-avatar-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
 
 .landing .l-status-badge {
   font-size: 11.5px;
@@ -807,6 +810,84 @@
   cursor: not-allowed;
 }
 
+/* --- avatar detail dialog --- */
+
+.landing dialog.l-avatar-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  width: min(560px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 48px));
+  padding: 0;
+  border: 1px solid var(--l-border);
+  border-radius: 16px;
+  background: var(--l-bg-raised);
+  color: var(--l-fg);
+  overflow: hidden auto;
+}
+
+.landing dialog.l-avatar-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.landing .l-avatar-dialog-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background: var(--l-bg);
+}
+
+.landing .l-avatar-dialog-placeholder {
+  aspect-ratio: 16 / 10;
+}
+
+.landing .l-avatar-dialog-body {
+  padding: 20px 24px 24px;
+}
+
+.landing .l-avatar-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.landing .l-avatar-dialog-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.landing .l-dialog-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.landing .l-dialog-close:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.landing .l-dialog-delete {
+  display: block;
+  margin-top: 18px;
+  border: 1px solid var(--l-border);
+}
+
 /* --- mobile --- */
 
 @media (max-width: 780px) {
@@ -842,9 +923,6 @@
 
   .landing .l-avatar-row {
     flex-direction: column;
-  }
-
-  .landing .l-avatar-row-actions {
-    align-self: flex-end;
+    align-items: flex-start;
   }
 }
