@@ -1,6 +1,15 @@
 import Link from "next/link";
+import "./landing.css";
+import { inter, jetbrainsMono, spaceGrotesk } from "./landing-fonts";
 
-const PROOF_POINTS = [
+const PIPELINE = [
+  { label: "Upload", body: "One 6-second clip, one person, facing the camera." },
+  { label: "Detect face", body: "S3FD locates and tracks the face across every frame." },
+  { label: "Quality gate", body: "Checked for watermarks, corruption, and tracking loss." },
+  { label: "Ready", body: "A working avatar, ready to serve." },
+];
+
+const FEATURES = [
   {
     title: "Automated quality gate",
     body: "Every upload is checked frame by frame for watermarks, repeated corruption, and face-tracking stability before an avatar ever ships -- not a manual review.",
@@ -13,6 +22,16 @@ const PROOF_POINTS = [
     title: "Two ways to serve",
     body: "Spin up on-demand and pay per minute, or reserve a dedicated GPU for always-on, no-cold-start serving.",
   },
+  {
+    title: "Scales to zero",
+    body: "On-demand workers spin up per request and shut down when idle -- no GPU sits around running up a bill.",
+  },
+];
+
+const STATS = [
+  { value: "$0.35/min", label: "On-demand serving rate" },
+  { value: "< 60s", label: "Upload to ready" },
+  { value: "8", label: "Concurrent sessions per avatar" },
 ];
 
 const FAQS = [
@@ -44,93 +63,142 @@ const FAQS = [
 
 export default function LandingPage() {
   return (
-    <main>
-      <nav className="nav">
-        <span className="brand">Avatar Studio</span>
-        <div className="nav-links">
+    <main className={`landing ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
+      <nav className="l-nav">
+        <span className="l-brand">Avatar Studio</span>
+        <div className="l-nav-links">
           <Link href="/pricing">Pricing</Link>
-          <Link href="/dashboard" className="button button-primary">
+          <Link href="/dashboard" className="l-btn l-btn-primary">
             Get started
           </Link>
         </div>
       </nav>
 
-      <section className="hero">
+      <section className="l-hero">
+        <span className="l-kicker">Avatar creation</span>
         <h1>
-          Turn a 6-second video
+          Turn a 6-second video into a
           <br />
-          into a real-time talking avatar.
+          real-time talking avatar.
         </h1>
         <p>
           Upload one short clip. We detect the face, build the talking and
           idle frame sets, and hand you back an avatar ready to serve live
           conversations -- billed per minute of GPU time, not per video.
         </p>
-        <Link href="/dashboard" className="button button-primary">
-          Create your first avatar
-        </Link>
-      </section>
-
-      <section className="steps">
-        <div className="step">
-          <div className="step-number">01</div>
-          <h3>Upload</h3>
-          <p>A 6-second video of one person, facing the camera. That&rsquo;s the only input we need.</p>
-        </div>
-        <div className="step">
-          <div className="step-number">02</div>
-          <h3>We build it</h3>
-          <p>
-            Face detection, talking and idle frame generation, and an
-            automated quality check run in under a minute.
-          </p>
-        </div>
-        <div className="step">
-          <div className="step-number">03</div>
-          <h3>Deploy</h3>
-          <p>Your avatar is ready to serve live, lip-synced conversations on demand.</p>
+        <div className="l-hero-ctas">
+          <Link href="/dashboard" className="l-btn l-btn-primary">
+            Create your first avatar
+          </Link>
+          <Link href="/pricing" className="l-btn l-btn-ghost">
+            See pricing
+          </Link>
         </div>
       </section>
 
-      <section className="section">
-        <div className="section-title">
-          <h2>Built on infrastructure already serving real traffic</h2>
-          <p>Not a prototype -- the same pipeline behind live customer-facing deployments today.</p>
+      <div className="l-pipeline">
+        {PIPELINE.map((node) => (
+          <div className="l-pipeline-node" key={node.label}>
+            <div className="l-pipeline-dot" />
+            <h4>{node.label}</h4>
+            <p>{node.body}</p>
+          </div>
+        ))}
+      </div>
+
+      <section className="l-section">
+        <div className="l-section-title l-center">
+          <span className="l-kicker">Why it holds up</span>
+          <h2>Built to run unsupervised</h2>
+          <p>A self-service pipeline has to catch what a human reviewer would -- automatically, every time.</p>
         </div>
-        <div className="proof-grid">
-          {PROOF_POINTS.map((point) => (
-            <div className="proof-item" key={point.title}>
-              <h3>{point.title}</h3>
-              <p>{point.body}</p>
+        <div className="l-feature-grid">
+          {FEATURES.map((f) => (
+            <div className="l-feature-card" key={f.title}>
+              <div className="l-dot" />
+              <h3>{f.title}</h3>
+              <p>{f.body}</p>
             </div>
           ))}
         </div>
       </section>
 
-      <section className="section">
-        <div className="section-title">
-          <h2>Simple, usage-based pricing</h2>
-          <p>Avatar creation is free. You only pay for the minutes your avatar is actually live.</p>
-        </div>
-        <div className="price-teaser">
-          <div className="price-teaser-amount">
-            $0.35<span>/min</span>
-          </div>
-          <div className="price-teaser-label">On-demand serving, billed to the minute</div>
-          <Link href="/pricing" className="button button-secondary">
-            See full pricing
-          </Link>
+      <section className="l-section">
+        <div className="l-stat-row">
+          {STATS.map((s) => (
+            <div className="l-stat-card" key={s.label}>
+              <div className="l-stat-value">{s.value}</div>
+              <div className="l-stat-label">{s.label}</div>
+            </div>
+          ))}
         </div>
       </section>
 
-      <section className="section">
-        <div className="section-title">
+      <section className="l-section">
+        <div className="l-section-title l-center">
+          <span className="l-kicker">Pricing</span>
+          <h2>Simple, usage-based pricing</h2>
+          <p>Avatar creation is free. You only pay for the minutes your avatar is actually live.</p>
+        </div>
+        <div className="l-pricing-grid">
+          <div className="l-price-card">
+            <h3>On-demand</h3>
+            <div className="l-price">
+              $0.35<span className="l-price-unit"> / min</span>
+            </div>
+            <div className="l-price-note">Serving time, billed to the minute</div>
+            <ul>
+              <li>Unlimited avatar creation</li>
+              <li>Spin up in seconds, pay only while live</li>
+              <li>Up to 8 concurrent sessions per avatar</li>
+              <li>Automated quality check on every upload</li>
+            </ul>
+            <Link href="/dashboard" className="l-btn l-btn-ghost" style={{ width: "100%" }}>
+              Start free
+            </Link>
+          </div>
+
+          <div className="l-price-card l-featured">
+            <h3>Dedicated</h3>
+            <div className="l-price">Custom</div>
+            <div className="l-price-note">Reserved GPU, fixed monthly rate</div>
+            <ul>
+              <li>Everything in On-demand</li>
+              <li>Always-on, no cold start</li>
+              <li>Priority support</li>
+              <li>Typical term: 6 months</li>
+            </ul>
+            <a href="mailto:hello@avatar-studio.example" className="l-btn l-btn-primary" style={{ width: "100%" }}>
+              Talk to us
+            </a>
+          </div>
+
+          <div className="l-price-card">
+            <h3>Enterprise</h3>
+            <div className="l-price">Custom</div>
+            <div className="l-price-note">Multiple avatars, volume pricing</div>
+            <ul>
+              <li>Everything in Dedicated</li>
+              <li>Multiple avatars, multiple GPUs</li>
+              <li>SLA + dedicated support</li>
+              <li>Custom integration support</li>
+            </ul>
+            <a href="mailto:hello@avatar-studio.example" className="l-btn l-btn-ghost" style={{ width: "100%" }}>
+              Talk to us
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="l-section">
+        <div className="l-section-title l-center">
+          <span className="l-kicker">FAQ</span>
           <h2>Questions</h2>
           <p>Everything you need to know before you upload.</p>
         </div>
-        <div className="faq-list">
+        <div className="l-faq-list">
           {FAQS.map((item) => (
-            <details className="faq-item" key={item.q}>
+            <details className="l-faq-item" key={item.q}>
               <summary>{item.q}</summary>
               <p>{item.a}</p>
             </details>
@@ -138,15 +206,25 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="cta-band">
+      <section className="l-section">
+        <p className="l-trust">
+          Your video and the avatar built from it are private to your
+          account -- stored to serve your own sessions, nothing else.
+        </p>
+      </section>
+
+      <section className="l-cta-band">
         <h2>Ready to build your avatar?</h2>
         <p>Upload a video, get a working avatar back in under a minute.</p>
-        <Link href="/dashboard" className="button button-primary">
+        <Link href="/dashboard" className="l-btn l-btn-dark">
           Create your first avatar
         </Link>
       </section>
 
-      <footer className="footer">Avatar Studio</footer>
+      <footer className="l-footer">
+        <span>Avatar Studio</span>
+        <Link href="/pricing">Pricing</Link>
+      </footer>
     </main>
   );
 }
