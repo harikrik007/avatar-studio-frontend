@@ -16,10 +16,10 @@
   color: var(--l-fg);
   font-family: var(--font-body), -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
-  /* body's own background still comes from globals.css's root tokens (light
-     by default) -- /gate intentionally still uses those, so this can't be
-     fixed globally. Without this, any .landing page shorter than the
-     viewport (e.g. an empty state) shows body's white background below it. */
+  /* body's own background still comes from globals.css's root tokens
+     (light by default) -- without this, any .landing page shorter than
+     the viewport (e.g. an empty state) shows body's white background
+     below it. */
   min-height: 100vh;
 }
 
