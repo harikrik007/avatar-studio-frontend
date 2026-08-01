@@ -118,7 +118,7 @@ function newTool(type: ToolType = "http_request"): ToolConfig {
 /* Runs one tool once against the real executor and shows what came back.
    Before this, checking a tool meant booting a GPU worker and talking to
    the avatar to find out a URL had a typo in it. */
-function ToolTester({ tool }: { tool: ToolConfig }) {
+function ToolTester({ tool, agentId }: { tool: ToolConfig; agentId?: string }) {
   const [open, setOpen] = useState(false);
   const [args, setArgs] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -144,7 +144,7 @@ function ToolTester({ tool }: { tool: ToolConfig }) {
     const res = await fetch("/api/tools/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tool, args: typed }),
+      body: JSON.stringify({ tool, args: typed, agent_id: agentId ?? null }),
     });
     const body = await res.json().catch(() => ({}));
     setBusy(false);
@@ -329,7 +329,7 @@ function AgentRow({ agent, avatars, onOpen }: { agent: Agent; avatars: Avatar[];
   );
 }
 
-function ToolEditor({ tools, onChange }: { tools: ToolConfig[]; onChange: (tools: ToolConfig[]) => void }) {
+function ToolEditor({ tools, onChange, agentId }: { tools: ToolConfig[]; onChange: (tools: ToolConfig[]) => void; agentId?: string }) {
   function updateTool(id: string, patch: Partial<ToolConfig>) {
     onChange(tools.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }
@@ -454,8 +454,9 @@ function ToolEditor({ tools, onChange }: { tools: ToolConfig[]; onChange: (tools
                     placeholder={"Authorization: Bearer your-api-key\nX-Api-Key: abc123"}
                   />
                   <p className="l-connector-note">
-                    {"{param}"} works here too. Anyone who can open this agent can read these
-                    values, so use a key scoped to just what the agent needs.
+                    {"{param}"} works here too. Keys are encrypted and shown only as
+                    &bull;&bull;&bull;&bull;1234 once saved — leave the dots alone to keep the
+                    saved key, or type a new value to replace it.
                   </p>
                 </div>
 
@@ -472,7 +473,7 @@ function ToolEditor({ tools, onChange }: { tools: ToolConfig[]; onChange: (tools
                   </div>
                 ) : null}
 
-                <ToolTester tool={tool} />
+                <ToolTester tool={tool} agentId={agentId} />
               </>
             )}
           </div>
@@ -1125,7 +1126,7 @@ function AgentDialog({
               onChanged={onChanged}
             />
 
-            <ToolEditor tools={tools} onChange={setTools} />
+            <ToolEditor tools={tools} onChange={setTools} agentId={agent.id} />
 
             <div className="l-upload-actions" style={{ marginTop: 18 }}>
               <button
