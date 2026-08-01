@@ -1283,6 +1283,72 @@
   flex-wrap: wrap;
 }
 
+/* --- knowledge files --- */
+
+.landing .l-doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.landing .l-doc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--l-border);
+  border-radius: 8px;
+  background: var(--l-bg);
+}
+
+.landing .l-doc-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.landing .l-doc-name {
+  font-size: var(--l-fs-body);
+  /* Long filenames must not push the Remove button out of the row. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landing .l-doc-meta {
+  font-size: var(--l-fs-helper);
+  color: var(--l-muted);
+}
+
+.landing .l-doc-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  font-size: var(--l-fs-helper);
+  color: var(--l-muted);
+}
+
+/* The browser's default file button is unstyled next to everything else
+   here, and it is the one control in the form the user has to find. */
+.landing .l-doc-input::file-selector-button {
+  margin-right: 10px;
+  padding: 8px 14px;
+  border: 1px solid var(--l-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--l-fg);
+  font-family: inherit;
+  font-size: var(--l-fs-body);
+  cursor: pointer;
+}
+
+.landing .l-doc-input::file-selector-button:hover {
+  background: var(--l-bg-raised);
+}
+
 /* --- agent detail dialog: two panes, avatar left / config right ---
    Stacked vertically this dialog pushed the avatar off-screen the moment you
    scrolled to the tools, which is exactly when you most want to see who you

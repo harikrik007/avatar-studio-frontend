@@ -54,6 +54,14 @@ const CONNECTOR_PRESETS: Record<ToolType, { label: string; defaultName: string; 
   },
 };
 
+type AgentDocument = {
+  id: string;
+  filename: string;
+  char_count: number;
+  size_bytes: number;
+  created_at: string;
+};
+
 type Agent = {
   id: string;
   avatar_id: string;
@@ -62,7 +70,10 @@ type Agent = {
   tools_json: ToolConfig[];
   status: "draft" | "live";
   created_at: string;
+  documents: AgentDocument[];
 };
+
+const DOC_EXTENSIONS = ".pdf,.txt,.md,.csv,.docx";
 
 function newTool(type: ToolType = "http_request"): ToolConfig {
   const preset = CONNECTOR_PRESETS[type];
@@ -191,6 +202,9 @@ function AgentRow({ agent, avatars, onOpen }: { agent: Agent; avatars: Avatar[];
           <div className="l-avatar-meta">
             {avatar ? avatar.name : "Unknown avatar"} — {agent.tools_json.length} tool
             {agent.tools_json.length === 1 ? "" : "s"}
+            {agent.documents?.length
+              ? ` · ${agent.documents.length} knowledge file${agent.documents.length === 1 ? "" : "s"}`
+              : ""}
           </div>
         </div>
       </div>
@@ -339,6 +353,169 @@ function ToolEditor({ tools, onChange }: { tools: ToolConfig[]; onChange: (tools
   );
 }
 
+function formatDocMeta(doc: AgentDocument): string {
+  const kb = doc.size_bytes / 1024;
+  const size = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(kb))} KB`;
+  return `${size} · ${doc.char_count.toLocaleString()} characters of text`;
+}
+
+/* Knowledge files for an agent already saved in the database: uploads and
+   deletes take effect immediately, since there is an agent id to hang them
+   off. The create form uses PendingKnowledgeFiles instead. */
+function KnowledgeFiles({
+  agentId,
+  initialDocuments,
+  onChanged,
+}: {
+  agentId: string;
+  initialDocuments: AgentDocument[];
+  onChanged: () => void;
+}) {
+  // This component owns its list rather than reading the dialog's `agent`
+  // prop. That prop is a snapshot taken when the row was clicked, so it
+  // would never show a newly uploaded file -- and re-syncing it from the
+  // refreshed list would reset the name/prompt/tools fields underneath the
+  // user's unsaved edits.
+  const [documents, setDocuments] = useState<AgentDocument[]>(initialDocuments);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setDocuments(initialDocuments);
+    setError(null);
+    // Re-seed when the dialog is opened on a different agent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId]);
+
+  const reload = useCallback(async () => {
+    const res = await fetch(`/api/agents/${agentId}/documents`);
+    if (res.ok) setDocuments(await res.json());
+    onChanged(); // keeps the list behind the dialog in step
+  }, [agentId, onChanged]);
+
+  async function upload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setBusy(true);
+    setError(null);
+    // Sequential, not Promise.all: the backend caps files per agent, and a
+    // parallel burst would race that check and report confusing errors.
+    for (const file of Array.from(files)) {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/agents/${agentId}/documents`, { method: "POST", body: form });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.detail || body.error || `Couldn't upload ${file.name}.`);
+        break;
+      }
+    }
+    if (inputRef.current) inputRef.current.value = "";
+    await reload();
+    setBusy(false);
+  }
+
+  async function remove(doc: AgentDocument) {
+    if (!window.confirm(`Remove "${doc.filename}" from this agent's knowledge?`)) return;
+    setBusy(true);
+    await fetch(`/api/agents/${agentId}/documents/${doc.id}`, { method: "DELETE" });
+    await reload();
+    setBusy(false);
+  }
+
+  return (
+    <div className="l-field">
+      <label>Knowledge files</label>
+      <p className="l-connector-note">
+        Menus, price lists, policies, FAQs. The agent answers from these and won&apos;t invent
+        details they don&apos;t cover. PDF, Word, text, Markdown or CSV.
+      </p>
+
+      {documents.length > 0 ? (
+        <div className="l-doc-list">
+          {documents.map((doc) => (
+            <div className="l-doc-row" key={doc.id}>
+              <div className="l-doc-info">
+                <span className="l-doc-name">{doc.filename}</span>
+                <span className="l-doc-meta">{formatDocMeta(doc)}</span>
+              </div>
+              <button type="button" className="l-btn-delete" disabled={busy} onClick={() => remove(doc)}>
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept={DOC_EXTENSIONS}
+        disabled={busy}
+        onChange={(e) => void upload(e.target.files)}
+        className="l-doc-input"
+      />
+      {busy ? <p className="l-connector-note">Uploading…</p> : null}
+      {error ? <p className="l-error-text">{error}</p> : null}
+    </div>
+  );
+}
+
+/* The create form has no agent id yet, so files are held here and uploaded
+   by the caller once the agent row exists. */
+function PendingKnowledgeFiles({
+  files,
+  onChange,
+}: {
+  files: File[];
+  onChange: (files: File[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="l-field">
+      <label>Knowledge files (optional)</label>
+      <p className="l-connector-note">
+        Menus, price lists, policies, FAQs. The agent answers from these and won&apos;t invent
+        details they don&apos;t cover. PDF, Word, text, Markdown or CSV.
+      </p>
+      {files.length > 0 ? (
+        <div className="l-doc-list">
+          {files.map((file, i) => (
+            <div className="l-doc-row" key={`${file.name}-${i}`}>
+              <div className="l-doc-info">
+                <span className="l-doc-name">{file.name}</span>
+                <span className="l-doc-meta">
+                  {Math.max(1, Math.round(file.size / 1024)).toLocaleString()} KB · uploads when you
+                  create the agent
+                </span>
+              </div>
+              <button
+                type="button"
+                className="l-btn-delete"
+                onClick={() => onChange(files.filter((_, j) => j !== i))}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept={DOC_EXTENSIONS}
+        className="l-doc-input"
+        onChange={(e) => {
+          onChange([...files, ...Array.from(e.target.files ?? [])]);
+          if (inputRef.current) inputRef.current.value = "";
+        }}
+      />
+    </div>
+  );
+}
+
 function CreateAgentForm({
   readyAvatars,
   onCancel,
@@ -352,6 +529,7 @@ function CreateAgentForm({
   const [name, setName] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [tools, setTools] = useState<ToolConfig[]>([]);
+  const [docFiles, setDocFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -365,12 +543,37 @@ function CreateAgentForm({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ avatar_id: avatarId, name: name.trim(), system_prompt: systemPrompt, tools }),
     });
-    setBusy(false);
     if (!res.ok) {
+      setBusy(false);
       const body = await res.json().catch(() => ({}));
       setError(body.error || body.detail || "Couldn't create the agent.");
       return;
     }
+
+    // Documents need an agent id, so they upload after the row exists. A
+    // failure here is reported but does not discard the agent -- it was
+    // created, and the files can be added again from the edit dialog.
+    const created = await res.json().catch(() => null);
+    if (created?.id && docFiles.length > 0) {
+      for (const file of docFiles) {
+        const form = new FormData();
+        form.append("file", file);
+        const docRes = await fetch(`/api/agents/${created.id}/documents`, { method: "POST", body: form });
+        if (!docRes.ok) {
+          const body = await docRes.json().catch(() => ({}));
+          setBusy(false);
+          setError(
+            `Agent created, but ${file.name} could not be added: ${
+              body.detail || body.error || "upload failed"
+            }. You can add it from the agent's settings.`
+          );
+          onCreated();
+          return;
+        }
+      }
+    }
+
+    setBusy(false);
     onCreated();
   }
 
@@ -406,6 +609,8 @@ function CreateAgentForm({
           placeholder="You are a friendly front desk assistant for Acme Dental. Help visitors check appointment availability and answer questions about the clinic."
         />
       </div>
+
+      <PendingKnowledgeFiles files={docFiles} onChange={setDocFiles} />
 
       <ToolEditor tools={tools} onChange={setTools} />
 
@@ -721,6 +926,12 @@ function AgentDialog({
               <label>System prompt</label>
               <textarea rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
             </div>
+
+            <KnowledgeFiles
+              agentId={agent.id}
+              initialDocuments={agent.documents ?? []}
+              onChanged={onChanged}
+            />
 
             <ToolEditor tools={tools} onChange={setTools} />
 
