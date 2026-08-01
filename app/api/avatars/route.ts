@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
 
 // Same shape as pizza_wav2lip_client's app/api/avatar-session/route.ts:
 // this server route holds the backend bearer token, the browser never
@@ -8,8 +9,16 @@ const API_URL = process.env.AVATAR_STUDIO_API_URL || "http://127.0.0.1:8095";
 const API_TOKEN = process.env.AVATAR_STUDIO_API_TOKEN || "";
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.clientId) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
   const res = await fetch(`${API_URL}/avatars`, {
-    headers: { Authorization: `Bearer ${API_TOKEN}` },
+    headers: {
+      Authorization: `Bearer ${API_TOKEN}`,
+      "X-Avatar-Studio-Client-Id": session.clientId,
+    },
     cache: "no-store",
   });
   const body = await res.json();
@@ -17,6 +26,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.clientId) {
+    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+
   const incoming = await request.formData();
   const file = incoming.get("file");
   const name = incoming.get("name");
@@ -34,7 +48,10 @@ export async function POST(request: Request) {
 
   const res = await fetch(`${API_URL}/avatars`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${API_TOKEN}` },
+    headers: {
+      Authorization: `Bearer ${API_TOKEN}`,
+      "X-Avatar-Studio-Client-Id": session.clientId,
+    },
     body: outgoing,
   });
   const body = await res.json();

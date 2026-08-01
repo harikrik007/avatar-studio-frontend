@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { signOut, useSession } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "../landing.css";
 import { inter, jetbrainsMono, spaceGrotesk } from "../landing-fonts";
@@ -40,6 +41,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function DashboardPage() {
+  const { data: session } = useSession();
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   const [name, setName] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -108,6 +110,17 @@ export default function DashboardPage() {
         </Link>
         <div className="l-nav-links">
           <Link href="/pricing">Pricing</Link>
+          {session ? (
+            <div className="l-account">
+              {session.user?.image ? (
+                <img className="l-account-avatar" src={session.user.image} alt="" />
+              ) : null}
+              <span className="l-account-name">{session.companyName || session.user?.email}</span>
+              <button type="button" className="l-btn-expand" onClick={() => signOut({ callbackUrl: "/" })}>
+                Sign out
+              </button>
+            </div>
+          ) : null}
         </div>
       </nav>
 

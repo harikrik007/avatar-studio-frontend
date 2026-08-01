@@ -489,6 +489,63 @@
   color: var(--l-fg);
 }
 
+/* --- login / onboarding --- */
+
+.landing .l-login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.landing .l-login-card {
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+
+.landing .l-login-card h1 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 10px 0 8px;
+}
+
+.landing .l-login-card p {
+  font-size: 14px;
+  color: var(--l-muted);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+.landing .l-login-card .l-field input {
+  text-align: center;
+}
+
+/* --- account (signed-in nav) --- */
+
+.landing .l-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.landing .l-account-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.landing .l-account-name {
+  font-size: 13px;
+  color: var(--l-muted);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --- dashboard --- */
 
 .landing .l-dash-shell {
