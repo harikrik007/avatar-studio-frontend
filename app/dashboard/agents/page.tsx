@@ -1,13 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Room, RoomEvent, Track } from "livekit-client";
 import type { RemoteTrack, RemoteTrackPublication, RemoteParticipant } from "livekit-client";
+import FlowRail from "../FlowRail";
+import { AvatarThumb, DialogPlaceholder, RowChevron, SkeletonRows, Spinner } from "../ui";
 
 type Avatar = {
   id: string;
   name: string;
   status: "uploading" | "processing" | "quality_check" | "ready" | "failed";
+  // GET /api/avatars already returns this; the agent list just never read it,
+  // which is why agent rows rendered an empty thumbnail.
   preview_video_url?: string | null;
 };
 
@@ -82,11 +87,15 @@ export default function AgentsPage() {
   const [avatars, setAvatars] = useState<Avatar[]>([]);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<Agent | null>(null);
+  // Distinguishes "still loading" from "genuinely empty" -- the empty state
+  // used to flash on every page load before the first fetch resolved.
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     const [agentsRes, avatarsRes] = await Promise.all([fetch("/api/agents"), fetch("/api/avatars")]);
     if (agentsRes.ok) setAgents(await agentsRes.json());
     if (avatarsRes.ok) setAvatars(await avatarsRes.json());
+    setLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -100,8 +109,14 @@ export default function AgentsPage() {
       <div className="l-dash-header">
         <span className="l-kicker">Dashboard</span>
         <h1>Agents</h1>
-        <p>Turn an avatar into a live agent -- give it a system prompt and connect the tools it needs.</p>
+        <p>Give an avatar a system prompt and tools, then take it live.</p>
       </div>
+
+      <FlowRail
+        hasAvatar={readyAvatars.length > 0}
+        hasAgent={agents.length > 0}
+        hasLiveAgent={agents.some((a) => a.status === "live")}
+      />
 
       {creating ? (
         <CreateAgentForm
@@ -112,28 +127,44 @@ export default function AgentsPage() {
             void refresh();
           }}
         />
-      ) : (
-        <div className="l-dropzone" style={{ textAlign: "center" }}>
+      ) : !loaded ? (
+        <SkeletonRows />
+      ) : agents.length === 0 ? (
+        <div className="l-empty-state">
           {readyAvatars.length === 0 ? (
-            <p style={{ color: "var(--l-muted)", fontSize: 14, margin: 0 }}>
-              You need at least one ready avatar before you can create an agent.
-            </p>
+            <>
+              <h2>Create an avatar first</h2>
+              <p>An agent needs a face to speak with. Build one from a 6-second video, then come back.</p>
+              <Link href="/dashboard/avatars" className="l-btn l-btn-primary">
+                Create an avatar
+              </Link>
+            </>
           ) : (
+            <>
+              <h2>No agents yet</h2>
+              <p>
+                An agent is one of your avatars given a system prompt and a set of tools, so it can hold a
+                live conversation on your behalf.
+              </p>
+              <button type="button" className="l-btn l-btn-primary" onClick={() => setCreating(true)}>
+                Create agent
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="l-list-actions">
             <button type="button" className="l-btn l-btn-primary" onClick={() => setCreating(true)}>
               Create agent
             </button>
-          )}
-        </div>
-      )}
-
-      {agents.length === 0 ? (
-        <div className="l-empty-state">No agents yet.</div>
-      ) : (
-        <div className="l-avatar-list">
-          {agents.map((agent) => (
-            <AgentRow key={agent.id} agent={agent} avatars={avatars} onOpen={() => setSelected(agent)} />
-          ))}
-        </div>
+          </div>
+          <div className="l-avatar-list">
+            {agents.map((agent) => (
+              <AgentRow key={agent.id} agent={agent} avatars={avatars} onOpen={() => setSelected(agent)} />
+            ))}
+          </div>
+        </>
       )}
 
       <AgentDialog
@@ -151,18 +182,24 @@ function AgentRow({ agent, avatars, onOpen }: { agent: Agent; avatars: Avatar[];
   return (
     <button type="button" className="l-avatar-row" onClick={onOpen}>
       <div className="l-avatar-row-main">
-        <div className="l-avatar-thumb" />
+        <AvatarThumb
+          src={avatar?.status === "ready" ? avatar.preview_video_url : null}
+          name={avatar?.name ?? agent.name}
+        />
         <div className="l-avatar-info">
           <div className="l-avatar-name">{agent.name}</div>
           <div className="l-avatar-meta">
-            {avatar ? avatar.name : "Unknown avatar"} -- {agent.tools_json.length} tool
+            {avatar ? avatar.name : "Unknown avatar"} — {agent.tools_json.length} tool
             {agent.tools_json.length === 1 ? "" : "s"}
           </div>
         </div>
       </div>
-      <span className={`l-status-badge ${agent.status === "live" ? "l-status-ready" : "l-status-uploading"}`}>
-        {agent.status === "live" ? "Live" : "Draft"}
-      </span>
+      <div className="l-avatar-row-end">
+        <span className={`l-status-badge ${agent.status === "live" ? "l-status-ready" : "l-status-uploading"}`}>
+          {agent.status === "live" ? "Live" : "Draft"}
+        </span>
+        <RowChevron />
+      </div>
     </button>
   );
 }
@@ -222,7 +259,7 @@ function ToolEditor({ tools, onChange }: { tools: ToolConfig[]; onChange: (tools
 
             {!isCustom ? (
               <p className="l-connector-note">
-                Built-in connector -- no setup needed beyond the name and description above. The
+                Built-in connector—no setup needed beyond the name and description above. The
                 agent will pass its own search query automatically.
               </p>
             ) : (
@@ -374,11 +411,19 @@ function CreateAgentForm({
 
       <div className="l-upload-actions">
         <button className="l-btn l-btn-primary" type="submit" disabled={busy || !avatarId || !name.trim()}>
-          {busy ? "Creating..." : "Create agent"}
+          {busy ? (
+            <>
+              <Spinner />
+              Creating…
+            </>
+          ) : (
+            "Create agent"
+          )}
         </button>
-        <button type="button" className="l-btn l-btn-ghost" onClick={onCancel}>
+        <button type="button" className="l-btn l-btn-ghost" onClick={onCancel} disabled={busy}>
           Cancel
         </button>
+        {!busy && !name.trim() ? <span className="l-helper-text">Give the agent a name first.</span> : null}
       </div>
       {error ? <p className="l-error-text">{error}</p> : null}
     </form>
@@ -542,7 +587,7 @@ function LiveTestPanel({
         <audio ref={audioRef} autoPlay />
         {state !== "connected" ? (
           <div className="l-live-test-overlay">
-            {state === "error" ? error || "Something went wrong." : "Connecting..."}
+            {state === "error" ? error || "Something went wrong." : "Connecting…"}
           </div>
         ) : null}
       </div>
@@ -550,8 +595,8 @@ function LiveTestPanel({
         <span className="l-live-test-status">
           {state === "connected"
             ? micOn
-              ? "Live -- mic on, talk to your agent"
-              : `Live -- ${micError || "mic unavailable"}`
+              ? "Live — mic on, talk to your agent"
+              : `Live — ${micError || "mic unavailable"}`
             : state}
         </span>
         <button type="button" className="l-btn l-btn-ghost" onClick={handleStopClick}>
@@ -567,7 +612,7 @@ function LiveTestPanel({
               </div>
             ) : (
               <div key={e.id} className="l-live-test-line l-live-test-tool">
-                {e.status === "calling" ? `Calling ${e.name}...` : e.status === "done" ? `${e.name} responded` : `${e.name} failed`}
+                {e.status === "calling" ? `Calling ${e.name}…` : e.status === "done" ? `${e.name} responded` : `${e.name} failed`}
               </div>
             )
           )}
@@ -653,7 +698,7 @@ function AgentDialog({
               playsInline
             />
           ) : (
-            <div className="l-avatar-dialog-video l-avatar-dialog-placeholder" />
+            <DialogPlaceholder name={avatar?.name ?? agent.name} />
           )}
 
           <div className="l-avatar-dialog-body">
@@ -683,7 +728,14 @@ function AgentDialog({
                 disabled={busy}
                 onClick={() => save({ name, system_prompt: systemPrompt, tools })}
               >
-                Save changes
+                {busy ? (
+                  <>
+                    <Spinner />
+                    Saving…
+                  </>
+                ) : (
+                  "Save changes"
+                )}
               </button>
               <button
                 type="button"
@@ -691,7 +743,7 @@ function AgentDialog({
                 disabled={busy || testing}
                 onClick={() => setTesting(true)}
               >
-                {testing ? "Testing..." : "Test agent"}
+                {testing ? "Testing…" : "Test agent"}
               </button>
               <button
                 type="button"
@@ -703,7 +755,7 @@ function AgentDialog({
               </button>
             </div>
             <p className="l-connector-note" style={{ marginTop: 8 }}>
-              Test agent talks to a real, temporary live session on our GPU box -- your mic
+              Test agent talks to a real, temporary live session on our GPU box—your mic
               will be requested. It's separate from making the agent live for your own
               platform.
             </p>

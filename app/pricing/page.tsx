@@ -21,7 +21,7 @@ export default function PricingPage() {
       <section className="l-hero" style={{ paddingBottom: 24 }}>
         <span className="l-kicker">Pricing</span>
         <h1 style={{ fontSize: 44 }}>Find a plan for your team</h1>
-        <p>Every plan includes the full pipeline -- face detection, idle-motion generation, and an automated quality check on every upload.</p>
+        <p>Every plan includes the full pipeline—face detection, idle-motion generation, and an automated quality check on every upload.</p>
       </section>
 
       <section className="l-section" style={{ borderTop: "none", paddingTop: 0 }}>
