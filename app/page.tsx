@@ -1,6 +1,7 @@
 import Link from "next/link";
 import "./landing.css";
 import { inter, jetbrainsMono, spaceGrotesk } from "./landing-fonts";
+import PricingGrid from "./PricingGrid";
 
 const PIPELINE = [
   { label: "Upload", body: "One 6-second clip, one person, facing the camera." },
@@ -15,12 +16,12 @@ const FEATURES = [
     body: "Every upload is checked frame by frame for watermarks, repeated corruption, and face-tracking stability before an avatar ever ships -- not a manual review.",
   },
   {
-    title: "Billed to the GPU's own clock",
-    body: "Usage is metered against the provider's own reported uptime, not a local timer, so you're never billed for time you didn't use.",
+    title: "Metered to the GPU's own clock",
+    body: "Credits are spent against the provider's own reported uptime, not a local timer, so you're never charged for time you didn't use.",
   },
   {
-    title: "Two ways to serve",
-    body: "Spin up on-demand and pay per minute, or reserve a dedicated GPU for always-on, no-cold-start serving.",
+    title: "A plan for every scale",
+    body: "Start free with pay-as-you-go credits, or step up to a plan with a dedicated GPU included for always-on, no-cold-start serving.",
   },
   {
     title: "Scales to zero",
@@ -29,9 +30,9 @@ const FEATURES = [
 ];
 
 const STATS = [
-  { value: "$0.35/min", label: "On-demand serving rate" },
+  { value: "Free", label: "To create your first avatar" },
   { value: "< 60s", label: "Upload to ready" },
-  { value: "8", label: "Concurrent sessions per avatar" },
+  { value: "5", label: "Plans, from Free to Enterprise" },
 ];
 
 const FAQS = [
@@ -45,15 +46,15 @@ const FAQS = [
   },
   {
     q: "How is this billed?",
-    a: "Creating an avatar is free. You're billed per minute only while it's actually serving a live conversation.",
+    a: "Creating an avatar is free on every plan. Credits are spent on session minutes while your avatar is actually live.",
   },
   {
     q: "Can I get a dedicated GPU instead of on-demand?",
-    a: "Yes. The Dedicated tier reserves hardware for your avatar so there's no cold start, billed at a fixed monthly rate.",
+    a: "Yes -- the Business plan includes one dedicated GPU so there's no cold start; Enterprise can add more.",
   },
   {
     q: "How many people can talk to one avatar at once?",
-    a: "Up to 8 concurrent sessions per on-demand avatar. Enterprise plans provision additional GPUs for more.",
+    a: "Depends on your plan -- from 1 concurrent session on Free up to 100+ on Enterprise.",
   },
   {
     q: "How long does creation take?",
@@ -84,7 +85,7 @@ export default function LandingPage() {
         <p>
           Upload one short clip. We detect the face, build the talking and
           idle frame sets, and hand you back an avatar ready to serve live
-          conversations -- billed per minute of GPU time, not per video.
+          conversations -- free to create, credit-based to serve.
         </p>
         <div className="l-hero-ctas">
           <Link href="/dashboard" className="l-btn l-btn-primary">
@@ -137,57 +138,10 @@ export default function LandingPage() {
       <section className="l-section">
         <div className="l-section-title l-center">
           <span className="l-kicker">Pricing</span>
-          <h2>Simple, usage-based pricing</h2>
-          <p>Avatar creation is free. You only pay for the minutes your avatar is actually live.</p>
+          <h2>Simple, credit-based pricing</h2>
+          <p>Avatar creation is free on every plan. Credits are spent on session minutes.</p>
         </div>
-        <div className="l-pricing-grid">
-          <div className="l-price-card">
-            <h3>On-demand</h3>
-            <div className="l-price">
-              $0.35<span className="l-price-unit"> / min</span>
-            </div>
-            <div className="l-price-note">Serving time, billed to the minute</div>
-            <ul>
-              <li>Unlimited avatar creation</li>
-              <li>Spin up in seconds, pay only while live</li>
-              <li>Up to 8 concurrent sessions per avatar</li>
-              <li>Automated quality check on every upload</li>
-            </ul>
-            <Link href="/dashboard" className="l-btn l-btn-ghost" style={{ width: "100%" }}>
-              Start free
-            </Link>
-          </div>
-
-          <div className="l-price-card l-featured">
-            <h3>Dedicated</h3>
-            <div className="l-price">Custom</div>
-            <div className="l-price-note">Reserved GPU, fixed monthly rate</div>
-            <ul>
-              <li>Everything in On-demand</li>
-              <li>Always-on, no cold start</li>
-              <li>Priority support</li>
-              <li>Typical term: 6 months</li>
-            </ul>
-            <a href="mailto:hello@avatar-studio.example" className="l-btn l-btn-primary" style={{ width: "100%" }}>
-              Talk to us
-            </a>
-          </div>
-
-          <div className="l-price-card">
-            <h3>Enterprise</h3>
-            <div className="l-price">Custom</div>
-            <div className="l-price-note">Multiple avatars, volume pricing</div>
-            <ul>
-              <li>Everything in Dedicated</li>
-              <li>Multiple avatars, multiple GPUs</li>
-              <li>SLA + dedicated support</li>
-              <li>Custom integration support</li>
-            </ul>
-            <a href="mailto:hello@avatar-studio.example" className="l-btn l-btn-ghost" style={{ width: "100%" }}>
-              Talk to us
-            </a>
-          </div>
-        </div>
+        <PricingGrid />
       </section>
 
       <section className="l-section">
