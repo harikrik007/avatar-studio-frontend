@@ -404,3 +404,43 @@ a {
   font-size: 12px;
   color: var(--danger);
 }
+
+.quality-check-list {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.quality-check-list li.advisory {
+  color: var(--muted);
+}
+
+.avatar-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.button-delete {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.button-delete:hover {
+  color: var(--danger);
+  background: #fee2e2;
+}
+
+.button-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -20,3 +20,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   return NextResponse.json(body, { status: res.status });
 }
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const res = await fetch(`${API_URL}/avatars/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${API_TOKEN}` },
+  });
+  if (res.status === 204) {
+    return new NextResponse(null, { status: 204 });
+  }
+  const body = await res.json().catch(() => ({}));
+  return NextResponse.json(body, { status: res.status });
+}

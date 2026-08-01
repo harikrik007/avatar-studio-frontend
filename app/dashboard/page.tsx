@@ -133,7 +133,7 @@ export default function DashboardPage() {
         ) : (
           <div className="avatar-list">
             {avatars.map((avatar) => (
-              <AvatarRow key={avatar.id} avatar={avatar} />
+              <AvatarRow key={avatar.id} avatar={avatar} onDeleted={refresh} />
             ))}
           </div>
         )}
@@ -142,9 +142,22 @@ export default function DashboardPage() {
   );
 }
 
-function AvatarRow({ avatar }: { avatar: Avatar }) {
-  const failedChecks =
-    avatar.quality_report_json?.checks.filter((c) => !c.passed && !c.advisory) ?? [];
+function AvatarRow({ avatar, onDeleted }: { avatar: Avatar; onDeleted: () => void }) {
+  const [deleting, setDeleting] = useState(false);
+  const failedChecks = avatar.quality_report_json?.checks.filter((c) => !c.passed) ?? [];
+
+  async function handleDelete() {
+    if (!window.confirm(`Delete "${avatar.name}"? This removes it and its stored video permanently.`)) {
+      return;
+    }
+    setDeleting(true);
+    const res = await fetch(`/api/avatars/${avatar.id}`, { method: "DELETE" });
+    if (res.ok) {
+      onDeleted();
+    } else {
+      setDeleting(false);
+    }
+  }
 
   return (
     <div className="avatar-row">
@@ -164,12 +177,33 @@ function AvatarRow({ avatar }: { avatar: Avatar }) {
         <div>
           <div className="avatar-name">{avatar.name}</div>
           <div className="avatar-meta">{new Date(avatar.created_at).toLocaleString()}</div>
-          {avatar.status === "failed" && failedChecks.length > 0 ? (
+          {avatar.status === "failed" && avatar.status_detail ? (
             <div className="quality-detail">{avatar.status_detail}</div>
+          ) : null}
+          {avatar.status === "failed" && failedChecks.length > 1 ? (
+            <ul className="quality-check-list">
+              {failedChecks.map((c) => (
+                <li key={c.name} className={c.advisory ? "advisory" : undefined}>
+                  {c.name}
+                  {c.advisory ? " (advisory)" : ""}: {c.detail}
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
       </div>
-      <StatusBadge status={avatar.status} />
+      <div className="avatar-row-actions">
+        <StatusBadge status={avatar.status} />
+        <button
+          type="button"
+          className="button-delete"
+          onClick={handleDelete}
+          disabled={deleting}
+          aria-label={`Delete ${avatar.name}`}
+        >
+          {deleting ? "Deleting..." : "Delete"}
+        </button>
+      </div>
     </div>
   );
 }
