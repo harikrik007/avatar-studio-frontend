@@ -830,14 +830,13 @@
 .landing .l-dash-layout {
   display: flex;
   align-items: flex-start;
-  max-width: 1120px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .landing .l-sidebar {
-  width: 200px;
+  width: 220px;
   flex-shrink: 0;
-  padding: 48px 12px;
+  padding: 48px 12px 48px 24px;
   display: flex;
   flex-direction: column;
   gap: 4px;
