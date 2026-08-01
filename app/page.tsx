@@ -3,17 +3,29 @@ import "./landing.css";
 import { inter, jetbrainsMono, spaceGrotesk } from "./landing-fonts";
 import PricingGrid from "./PricingGrid";
 
+// The same three steps the dashboard's flow rail shows. The landing used to
+// describe the four internal stages of avatar creation instead, which never
+// mentioned agents -- so the product's actual shape only became apparent
+// after signing up.
 const PIPELINE = [
-  { label: "Upload", body: "One 6-second clip, one person, facing the camera." },
-  { label: "Detect face", body: "S3FD locates and tracks the face across every frame." },
-  { label: "Quality gate", body: "Checked for watermarks, corruption, and tracking loss." },
-  { label: "Ready", body: "A working avatar, ready to serve." },
+  {
+    label: "Create avatar",
+    body: "Upload one 6-second clip. We detect the face, run the quality gate, and build the avatar.",
+  },
+  {
+    label: "Build agent",
+    body: "Give the avatar a system prompt and connect the tools it should be able to call.",
+  },
+  {
+    label: "Go live",
+    body: "Take it live and let people hold real-time video conversations with it.",
+  },
 ];
 
 const FEATURES = [
   {
     title: "Automated quality gate",
-    body: "Every upload is checked frame by frame for watermarks, repeated corruption, and face-tracking stability before an avatar ever ships -- not a manual review.",
+    body: "Every upload is checked frame by frame for watermarks, repeated corruption, and face-tracking stability before an avatar ever ships—not a manual review.",
   },
   {
     title: "Metered to the GPU's own clock",
@@ -25,7 +37,7 @@ const FEATURES = [
   },
   {
     title: "Scales to zero",
-    body: "On-demand workers spin up per request and shut down when idle -- no GPU sits around running up a bill.",
+    body: "On-demand workers spin up per request and shut down when idle—no GPU sits around running up a bill.",
   },
 ];
 
@@ -37,12 +49,16 @@ const STATS = [
 
 const FAQS = [
   {
+    q: "What's the difference between an avatar and an agent?",
+    a: "An avatar is the face, built from your video. An agent is that avatar given a system prompt and a set of tools, so it can hold a conversation. One avatar can back as many agents as you like.",
+  },
+  {
     q: "What video works best?",
     a: "A single person, facing the camera, six seconds long, without a burned-in watermark or logo. Poor lighting or a shaky camera won't stop the upload, but they'll show up in the result.",
   },
   {
     q: "What happens if my video fails the quality check?",
-    a: "You'll see exactly which check failed -- a watermark, a corrupted frame, a face that couldn't be tracked -- and can re-upload. Nothing ships without passing.",
+    a: "You'll see exactly which check failed—a watermark, a corrupted frame, a face that couldn't be tracked—and can re-upload. Nothing ships without passing.",
   },
   {
     q: "How is this billed?",
@@ -50,11 +66,11 @@ const FAQS = [
   },
   {
     q: "Can I get a dedicated GPU instead of on-demand?",
-    a: "Yes -- the Business plan includes one dedicated GPU so there's no cold start; Enterprise can add more.",
+    a: "Yes—the Business plan includes one dedicated GPU so there's no cold start; Enterprise can add more.",
   },
   {
     q: "How many people can talk to one avatar at once?",
-    a: "Depends on your plan -- from 1 concurrent session on Free up to 100+ on Enterprise.",
+    a: "Depends on your plan—from 1 concurrent session on Free up to 100+ on Enterprise.",
   },
   {
     q: "How long does creation take?",
@@ -76,16 +92,16 @@ export default function LandingPage() {
       </nav>
 
       <section className="l-hero">
-        <span className="l-kicker">Avatar creation</span>
+        <span className="l-kicker">Avatars and agents</span>
         <h1>
           Turn a 6-second video into a
           <br />
-          real-time talking avatar.
+          real-time talking agent.
         </h1>
         <p>
-          Upload one short clip. We detect the face, build the talking and
-          idle frame sets, and hand you back an avatar ready to serve live
-          conversations -- free to create, credit-based to serve.
+          Upload one short clip and we build the avatar. Give it a system
+          prompt and the tools it needs, and it holds live conversations for
+          you—free to create, credit-based to serve.
         </p>
         <div className="l-hero-ctas">
           <Link href="/dashboard" className="l-btn l-btn-primary">
@@ -98,9 +114,9 @@ export default function LandingPage() {
       </section>
 
       <div className="l-pipeline">
-        {PIPELINE.map((node) => (
+        {PIPELINE.map((node, i) => (
           <div className="l-pipeline-node" key={node.label}>
-            <div className="l-pipeline-dot" />
+            <div className="l-pipeline-step">{i + 1}</div>
             <h4>{node.label}</h4>
             <p>{node.body}</p>
           </div>
@@ -111,7 +127,7 @@ export default function LandingPage() {
         <div className="l-section-title l-center">
           <span className="l-kicker">Why it holds up</span>
           <h2>Built to run unsupervised</h2>
-          <p>A self-service pipeline has to catch what a human reviewer would -- automatically, every time.</p>
+          <p>A self-service pipeline has to catch what a human reviewer would—automatically, every time.</p>
         </div>
         <div className="l-feature-grid">
           {FEATURES.map((f) => (
@@ -163,13 +179,13 @@ export default function LandingPage() {
       <section className="l-section">
         <p className="l-trust">
           Your video and the avatar built from it are private to your
-          account -- stored to serve your own sessions, nothing else.
+          account—stored to serve your own sessions, nothing else.
         </p>
       </section>
 
       <section className="l-cta-band">
-        <h2>Ready to build your avatar?</h2>
-        <p>Upload a video, get a working avatar back in under a minute.</p>
+        <h2>Ready to build your first agent?</h2>
+        <p>Upload a video, get a working avatar back in under a minute, then give it a prompt and tools.</p>
         <Link href="/dashboard" className="l-btn l-btn-dark">
           Create your first avatar
         </Link>
