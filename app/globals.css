@@ -472,3 +472,145 @@ a {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* --- landing page: proof points, pricing teaser, faq, closing cta --- */
+
+.proof-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.proof-item h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.proof-item p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.price-teaser {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.price-teaser-amount {
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.price-teaser-amount span {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.price-teaser-label {
+  font-size: 14px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.faq-list {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.faq-item {
+  border-top: 1px solid var(--border);
+  padding: 18px 0;
+}
+
+.faq-item:last-child {
+  border-bottom: 1px solid var(--border);
+}
+
+.faq-item summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item summary::after {
+  content: "+";
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.faq-item[open] summary::after {
+  content: "\2212";
+}
+
+.faq-item p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 12px 0 0;
+}
+
+.cta-band {
+  background: var(--fg);
+  color: var(--bg);
+  text-align: center;
+  padding: 72px 24px;
+}
+
+.cta-band h2 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+}
+
+.cta-band p {
+  opacity: 0.7;
+  font-size: 15px;
+  max-width: 440px;
+  margin: 0 auto 28px;
+  line-height: 1.5;
+}
+
+.cta-band .button-primary {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* --- mobile --- */
+
+@media (max-width: 720px) {
+  .steps,
+  .proof-grid,
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero h1 {
+    font-size: 32px;
+  }
+
+  .cta-band h2 {
+    font-size: 24px;
+  }
+}
