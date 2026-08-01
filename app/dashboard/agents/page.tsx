@@ -676,7 +676,33 @@ function LiveTestPanel({
   const intentionalDisconnectRef = useRef(false);
 
   const pushActivity = useCallback((entry: ActivityEntry) => {
-    setActivity((prev) => [...prev.slice(-19), entry]);
+    setActivity((prev) => {
+      // A tool call and its result arrive as two messages sharing one id.
+      // Replacing in place makes one call render as one line that moves
+      // from "Calling…" to "responded" -- appending instead produced two
+      // lines that read as two separate calls, and collided as duplicate
+      // React keys.
+      const existing = prev.findIndex((e) => e.id === entry.id);
+      if (existing !== -1) {
+        const next = [...prev];
+        next[existing] = entry;
+        return next;
+      }
+
+      // Gemini streams transcripts in fragments ("I'm sorry," / "I can't" /
+      // "get"), so one spoken sentence arrived as a dozen lines. Merge a
+      // fragment into the previous line when it continues the same speaker.
+      const last = prev[prev.length - 1];
+      if (entry.kind === "transcript" && last?.kind === "transcript" && last.role === entry.role) {
+        const merged: ActivityEntry = {
+          ...last,
+          text: `${last.text}${last.text.endsWith(" ") || entry.text.startsWith(" ") ? "" : " "}${entry.text}`.trim(),
+        };
+        return [...prev.slice(0, -1), merged];
+      }
+
+      return [...prev.slice(-19), entry];
+    });
   }, []);
 
   // Tears down whatever this component instance is currently holding.
