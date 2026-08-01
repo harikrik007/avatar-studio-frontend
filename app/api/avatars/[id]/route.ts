@@ -20,10 +20,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
   const body = await res.json();
 
-  // The backend's preview_video_url points at its own /static path, only
-  // reachable from this box -- rewrite it to a same-origin proxy the
-  // browser can actually fetch.
-  if (body.preview_video_url) {
+  // Local disk backend returns a relative /static path, only reachable
+  // from this box -- rewrite it to a same-origin proxy the browser can
+  // actually fetch. R2 returns an already-public, presigned https:// URL
+  // the browser can fetch directly, so leave it alone -- prefixing it with
+  // API_URL would produce a malformed double-absolute URL.
+  if (body.preview_video_url && !/^https?:\/\//.test(body.preview_video_url)) {
     body.preview_video_url = `/api/avatars/${id}/preview`;
   }
 

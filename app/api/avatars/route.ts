@@ -23,12 +23,12 @@ export async function GET() {
   });
   const body = await res.json();
 
-  // Same rewrite as the single-avatar route: the backend's preview_video_url
-  // points at its own /static path, only reachable from this box -- without
-  // this, every avatar in the list silently fails to load its thumbnail.
+  // Same rewrite as the single-avatar route: local disk returns a relative
+  // /static path that needs proxying; R2 returns an already-public,
+  // presigned https:// URL the browser can fetch directly.
   if (Array.isArray(body)) {
     for (const avatar of body) {
-      if (avatar.preview_video_url) {
+      if (avatar.preview_video_url && !/^https?:\/\//.test(avatar.preview_video_url)) {
         avatar.preview_video_url = `/api/avatars/${avatar.id}/preview`;
       }
     }
