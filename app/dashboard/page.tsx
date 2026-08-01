@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import "../landing.css";
+import { inter, jetbrainsMono, spaceGrotesk } from "../landing-fonts";
 
 type QualityCheck = {
   name: string;
@@ -29,7 +31,12 @@ const STATUS_LABEL: Record<Avatar["status"], string> = {
 };
 
 function StatusBadge({ status }: { status: Avatar["status"] }) {
-  return <span className={`status-badge status-${status}`}>{STATUS_LABEL[status]}</span>;
+  return <span className={`l-status-badge l-status-${status}`}>{STATUS_LABEL[status]}</span>;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default function DashboardPage() {
@@ -38,6 +45,7 @@ export default function DashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -59,6 +67,13 @@ export default function DashboardPage() {
     const interval = setInterval(refresh, 3000);
     return () => clearInterval(interval);
   }, [avatars, refresh]);
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragActive(false);
+    const dropped = e.dataTransfer.files?.[0];
+    if (dropped) setFile(dropped);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -86,23 +101,25 @@ export default function DashboardPage() {
   }
 
   return (
-    <main>
-      <nav className="nav">
-        <Link href="/" className="brand">
+    <main className={`landing ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
+      <nav className="l-nav">
+        <Link href="/" className="l-brand" style={{ textDecoration: "none", color: "inherit" }}>
           Avatar Studio
         </Link>
-        <div className="nav-links">
+        <div className="l-nav-links">
           <Link href="/pricing">Pricing</Link>
         </div>
       </nav>
 
-      <div className="dashboard-shell">
-        <div className="dashboard-header">
+      <div className="l-dash-shell">
+        <div className="l-dash-header">
+          <span className="l-kicker">Dashboard</span>
           <h1>Your avatars</h1>
+          <p>Upload a 6-second video to create a new one -- creation is free on every plan.</p>
         </div>
 
-        <form className="upload-card" onSubmit={submit}>
-          <div className="field">
+        <form className="l-dropzone" onSubmit={submit}>
+          <div className="l-field">
             <label htmlFor="avatar-name">Avatar name</label>
             <input
               id="avatar-name"
@@ -112,26 +129,54 @@ export default function DashboardPage() {
               placeholder="e.g. Front Desk Assistant"
             />
           </div>
-          <div className="field">
+
+          <div className="l-field">
             <label htmlFor="avatar-file">6-second video (.mp4, .mov, .webm)</label>
+            <div
+              className={`l-drop-target${dragActive ? " l-drag-active" : ""}`}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragActive(true);
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={handleDrop}
+              role="button"
+              tabIndex={0}
+            >
+              {file ? (
+                <div className="l-drop-file">
+                  {file.name} -- {formatBytes(file.size)}
+                </div>
+              ) : (
+                <>
+                  <div className="l-drop-title">Drag a video here, or click to browse</div>
+                  <div className="l-drop-hint">One person, facing the camera, six seconds long</div>
+                </>
+              )}
+            </div>
             <input
               id="avatar-file"
               ref={fileInputRef}
               type="file"
               accept="video/mp4,video/quicktime,video/webm"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              style={{ display: "none" }}
             />
           </div>
-          <button className="button button-primary" type="submit" disabled={busy || !file || !name.trim()}>
-            {busy ? "Uploading..." : "Create avatar"}
-          </button>
-          {error ? <p className="error-text">{error}</p> : null}
+
+          <div className="l-upload-actions">
+            <button className="l-btn l-btn-primary" type="submit" disabled={busy || !file || !name.trim()}>
+              {busy ? "Uploading..." : "Create avatar"}
+            </button>
+          </div>
+          {error ? <p className="l-error-text">{error}</p> : null}
         </form>
 
         {avatars.length === 0 ? (
-          <div className="empty-state">No avatars yet. Upload a video above to create your first one.</div>
+          <div className="l-empty-state">No avatars yet. Upload a video above to create your first one.</div>
         ) : (
-          <div className="avatar-list">
+          <div className="l-avatar-list">
             {avatars.map((avatar) => (
               <AvatarRow key={avatar.id} avatar={avatar} onDeleted={refresh} />
             ))}
@@ -161,11 +206,11 @@ function AvatarRow({ avatar, onDeleted }: { avatar: Avatar; onDeleted: () => voi
   }
 
   return (
-    <div className="avatar-row">
-      <div className="avatar-row-main">
+    <div className="l-avatar-row">
+      <div className="l-avatar-row-main">
         {avatar.status === "ready" && avatar.preview_video_url ? (
           <video
-            className="avatar-thumb"
+            className="l-avatar-thumb"
             src={avatar.preview_video_url}
             muted
             loop
@@ -173,27 +218,27 @@ function AvatarRow({ avatar, onDeleted }: { avatar: Avatar; onDeleted: () => voi
             playsInline
           />
         ) : (
-          <div className="avatar-thumb" />
+          <div className="l-avatar-thumb" />
         )}
-        <div className="avatar-info">
-          <div className="avatar-name">{avatar.name}</div>
-          <div className="avatar-meta">{new Date(avatar.created_at).toLocaleString()}</div>
+        <div className="l-avatar-info">
+          <div className="l-avatar-name">{avatar.name}</div>
+          <div className="l-avatar-meta">{new Date(avatar.created_at).toLocaleString()}</div>
           {avatar.status === "failed" && avatar.status_detail ? (
-            <div className="quality-detail">{avatar.status_detail}</div>
+            <div className="l-quality-detail">{avatar.status_detail}</div>
           ) : null}
           {checks.length > 0 ? (
             <button
               type="button"
-              className="button-expand"
+              className="l-btn-expand"
               onClick={() => setExpanded((v) => !v)}
             >
               {expanded ? "Hide" : "Show"} quality checks ({checks.length})
             </button>
           ) : null}
           {expanded ? (
-            <ul className="quality-check-list">
+            <ul className="l-quality-check-list">
               {checks.map((c) => (
-                <li key={c.name} className={c.passed ? "check-pass" : c.advisory ? "advisory" : "check-fail"}>
+                <li key={c.name} className={c.passed ? "l-check-pass" : c.advisory ? "l-advisory" : "l-check-fail"}>
                   {c.passed ? "✓" : c.advisory ? "!" : "✗"} {c.name}
                   {c.advisory ? " (advisory)" : ""}: {c.detail}
                 </li>
@@ -202,11 +247,11 @@ function AvatarRow({ avatar, onDeleted }: { avatar: Avatar; onDeleted: () => voi
           ) : null}
         </div>
       </div>
-      <div className="avatar-row-actions">
+      <div className="l-avatar-row-actions">
         <StatusBadge status={avatar.status} />
         <button
           type="button"
-          className="button-delete"
+          className="l-btn-delete"
           onClick={handleDelete}
           disabled={deleting}
           aria-label={`Delete ${avatar.name}`}
