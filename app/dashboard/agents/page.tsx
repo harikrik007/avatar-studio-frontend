@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Room, RoomEvent, Track } from "livekit-client";
+import type { RemoteTrack, RemoteTrackPublication, RemoteParticipant } from "livekit-client";
 
 type Avatar = {
   id: string;
   name: string;
   status: "uploading" | "processing" | "quality_check" | "ready" | "failed";
+  preview_video_url?: string | null;
 };
 
 type ToolParameter = {
@@ -382,6 +385,198 @@ function CreateAgentForm({
   );
 }
 
+type ActivityEntry =
+  | { id: string; kind: "transcript"; role: "user" | "assistant"; text: string }
+  | { id: string; kind: "tool"; name: string; status: "calling" | "done" | "failed" };
+
+type TestState = "idle" | "connecting" | "connected" | "error";
+
+// Talks to a real LiveKit room -- the same one agent.main just published its
+// avatar video/audio tracks into -- so this is the actual test drive, not a
+// mockup: real Gemini, real tool calls, real GPU-rendered video.
+function LiveTestPanel({
+  agentId,
+  onStopped,
+}: {
+  agentId: string;
+  onStopped: () => void;
+}) {
+  const [state, setState] = useState<TestState>("connecting");
+  const [error, setError] = useState<string | null>(null);
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [micOn, setMicOn] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const roomRef = useRef<Room | null>(null);
+  const roomNameRef = useRef<string | null>(null);
+  // Persists across React StrictMode's dev-only double-invoke of this
+  // effect (mount -> cleanup -> mount again, same instance, same refs).
+  // Without serializing on it, the second mount's start() could POST a new
+  // test session before the first mount's cleanup had finished DELETEing
+  // its session -- a real race, not just dev noise, since the orchestrator
+  // only has one slot: two sessions overlapping means the second 409s and
+  // the first leaks until its hard timeout.
+  const pendingRef = useRef<Promise<void>>(Promise.resolve());
+  const intentionalDisconnectRef = useRef(false);
+
+  const pushActivity = useCallback((entry: ActivityEntry) => {
+    setActivity((prev) => [...prev.slice(-19), entry]);
+  }, []);
+
+  // Tears down whatever this component instance is currently holding.
+  // Deliberately does NOT call onStopped() -- that's the parent-visible
+  // "testing ended" signal, which should only fire on an explicit Stop
+  // click or an unexpected disconnect, never on a teardown that's really
+  // just StrictMode's phantom cleanup ahead of an immediate remount.
+  const teardown = useCallback(async () => {
+    intentionalDisconnectRef.current = true;
+    roomRef.current?.disconnect();
+    roomRef.current = null;
+    const room = roomNameRef.current;
+    roomNameRef.current = null;
+    if (room) {
+      await fetch(`/api/agents/${agentId}/test-session?room=${encodeURIComponent(room)}`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
+  }, [agentId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function start() {
+      // Wait for any in-flight teardown (including a StrictMode phantom
+      // mount's cleanup) to actually finish before claiming a new session.
+      await pendingRef.current.catch(() => {});
+      if (cancelled) return;
+
+      const res = await fetch(`/api/agents/${agentId}/test-session`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (cancelled) return;
+      if (!res.ok) {
+        setError(body.error || body.detail || "Couldn't start a test session.");
+        setState("error");
+        return;
+      }
+      roomNameRef.current = body.room;
+      intentionalDisconnectRef.current = false;
+
+      const room = new Room();
+      roomRef.current = room;
+
+      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
+        if (track.kind === Track.Kind.Video && videoRef.current) track.attach(videoRef.current);
+        if (track.kind === Track.Kind.Audio && audioRef.current) track.attach(audioRef.current);
+      });
+
+      room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
+        try {
+          const msg = JSON.parse(new TextDecoder().decode(payload));
+          if (msg.type === "transcript" && msg.text) {
+            pushActivity({ id: crypto.randomUUID(), kind: "transcript", role: msg.role, text: msg.text });
+          } else if (msg.type === "tool_call") {
+            pushActivity({ id: msg.id, kind: "tool", name: msg.name, status: "calling" });
+          } else if (msg.type === "tool_result") {
+            pushActivity({
+              id: msg.id,
+              kind: "tool",
+              name: msg.name,
+              status: msg.response?.success === false ? "failed" : "done",
+            });
+          }
+        } catch {
+          // ignore non-JSON data packets
+        }
+      });
+
+      room.on(RoomEvent.Disconnected, () => {
+        // Only a *server-initiated* disconnect should tell the parent
+        // testing ended -- our own teardown() already set the intentional
+        // flag before calling room.disconnect(), which is what fires this
+        // same event on a deliberate Stop.
+        if (!intentionalDisconnectRef.current) {
+          onStopped();
+        }
+      });
+
+      try {
+        await room.connect(body.url, body.token);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Couldn't join the test session.");
+          setState("error");
+        }
+        return;
+      }
+      if (cancelled) return;
+      setState("connected"); // the avatar is visible even if the mic step below fails
+
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+        if (!cancelled) setMicOn(true);
+      } catch (e) {
+        // No mic, permission denied, or (like this sandbox) no audio
+        // device at all -- the test drive still shows the avatar live,
+        // just without the customer able to talk to it by voice.
+        if (!cancelled) setMicError(e instanceof Error ? e.message : "Microphone unavailable.");
+      }
+    }
+
+    pendingRef.current = start();
+    return () => {
+      cancelled = true;
+      pendingRef.current = pendingRef.current.catch(() => {}).then(teardown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId]);
+
+  const handleStopClick = useCallback(() => {
+    void teardown().then(onStopped);
+  }, [teardown, onStopped]);
+
+  return (
+    <div className="l-live-test">
+      <div className="l-avatar-dialog-video l-live-test-video-wrap">
+        <video ref={videoRef} autoPlay playsInline className="l-live-test-video" />
+        <audio ref={audioRef} autoPlay />
+        {state !== "connected" ? (
+          <div className="l-live-test-overlay">
+            {state === "error" ? error || "Something went wrong." : "Connecting..."}
+          </div>
+        ) : null}
+      </div>
+      <div className="l-live-test-bar">
+        <span className="l-live-test-status">
+          {state === "connected"
+            ? micOn
+              ? "Live -- mic on, talk to your agent"
+              : `Live -- ${micError || "mic unavailable"}`
+            : state}
+        </span>
+        <button type="button" className="l-btn l-btn-ghost" onClick={handleStopClick}>
+          Stop test
+        </button>
+      </div>
+      {activity.length > 0 ? (
+        <div className="l-live-test-activity">
+          {activity.map((e) =>
+            e.kind === "transcript" ? (
+              <div key={e.id} className={`l-live-test-line l-live-test-${e.role}`}>
+                <strong>{e.role === "user" ? "You" : "Agent"}:</strong> {e.text}
+              </div>
+            ) : (
+              <div key={e.id} className="l-live-test-line l-live-test-tool">
+                {e.status === "calling" ? `Calling ${e.name}...` : e.status === "done" ? `${e.name} responded` : `${e.name} failed`}
+              </div>
+            )
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function AgentDialog({
   agent,
   avatars,
@@ -398,6 +593,7 @@ function AgentDialog({
   const [systemPrompt, setSystemPrompt] = useState("");
   const [tools, setTools] = useState<ToolConfig[]>([]);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -409,6 +605,7 @@ function AgentDialog({
       if (!dialog.open) dialog.showModal();
     } else {
       dialog.close();
+      setTesting(false);
     }
   }, [agent]);
 
@@ -443,6 +640,22 @@ function AgentDialog({
           <button type="button" className="l-dialog-close" onClick={onClose} aria-label="Close">
             &times;
           </button>
+
+          {testing ? (
+            <LiveTestPanel agentId={agent.id} onStopped={() => setTesting(false)} />
+          ) : avatar?.preview_video_url ? (
+            <video
+              className="l-avatar-dialog-video"
+              src={avatar.preview_video_url}
+              muted
+              loop
+              autoPlay
+              playsInline
+            />
+          ) : (
+            <div className="l-avatar-dialog-video l-avatar-dialog-placeholder" />
+          )}
+
           <div className="l-avatar-dialog-body">
             <div className="l-avatar-dialog-header">
               <h2>{agent.name}</h2>
@@ -475,12 +688,25 @@ function AgentDialog({
               <button
                 type="button"
                 className="l-btn l-btn-ghost"
+                disabled={busy || testing}
+                onClick={() => setTesting(true)}
+              >
+                {testing ? "Testing..." : "Test agent"}
+              </button>
+              <button
+                type="button"
+                className="l-btn l-btn-ghost"
                 disabled={busy}
                 onClick={() => save({ status: agent.status === "live" ? "draft" : "live" })}
               >
                 {agent.status === "live" ? "Take offline" : "Make live"}
               </button>
             </div>
+            <p className="l-connector-note" style={{ marginTop: 8 }}>
+              Test agent talks to a real, temporary live session on our GPU box -- your mic
+              will be requested. It's separate from making the agent live for your own
+              platform.
+            </p>
             <button type="button" className="l-btn-delete l-dialog-delete" onClick={handleDelete}>
               Delete agent
             </button>
