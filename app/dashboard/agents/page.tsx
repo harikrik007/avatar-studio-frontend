@@ -34,7 +34,32 @@ type ToolConfig = {
   method: string;
   url: string;
   headers: Record<string, string>;
+  body_template?: string | null;
 };
+
+// Headers are stored as an object but edited as text, one "Name: value" per
+// line. A row-per-header UI has to keep its own identity while a name is
+// half-typed, and this is both less code and the form people already have
+// in hand -- an auth header is usually pasted straight from an API's docs.
+function headersToText(headers: Record<string, string>): string {
+  return Object.entries(headers ?? {})
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
+}
+
+function textToHeaders(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    // Split on the first colon only: values contain them (Bearer tokens,
+    // URLs) and must survive intact.
+    const at = line.indexOf(":");
+    if (at === -1) continue;
+    const key = line.slice(0, at).trim();
+    if (key) out[key] = line.slice(at + 1).trim();
+  }
+  return out;
+}
 
 // Built-in connectors: zero-config beyond a name -- realtime-avatar's
 // agent/connectors.py already knows how to run these server-side, so the
@@ -86,7 +111,93 @@ function newTool(type: ToolType = "http_request"): ToolConfig {
     method: "GET",
     url: "",
     headers: {},
+    body_template: null,
   };
+}
+
+/* Runs one tool once against the real executor and shows what came back.
+   Before this, checking a tool meant booting a GPU worker and talking to
+   the avatar to find out a URL had a typo in it. */
+function ToolTester({ tool }: { tool: ToolConfig }) {
+  const [open, setOpen] = useState(false);
+  const [args, setArgs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string; ms?: number } | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setResult(null);
+    // Numbers must go over as numbers: a tool declaring latitude as a
+    // number gets one from the model at runtime, so sending "51.5" here
+    // would test something subtly different from the real call.
+    const typed: Record<string, unknown> = {};
+    for (const p of tool.parameters) {
+      const raw = args[p.name] ?? "";
+      if (raw === "") continue;
+      typed[p.name] =
+        p.type === "number" || p.type === "integer"
+          ? Number(raw)
+          : p.type === "boolean"
+            ? raw === "true"
+            : raw;
+    }
+    const res = await fetch("/api/tools/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tool, args: typed }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      setResult({ ok: false, text: body.detail || body.error || "Test failed." });
+      return;
+    }
+    setResult({
+      ok: body.success,
+      ms: body.duration_ms,
+      text: JSON.stringify(body.success ? body.response.result ?? body.response : body.response, null, 2),
+    });
+  }
+
+  if (tool.type !== "http_request") return null;
+
+  return (
+    <div className="l-tool-test">
+      <button type="button" className="l-btn-expand" onClick={() => setOpen((v) => !v)}>
+        {open ? "Hide test" : "Test this tool"}
+      </button>
+      {open ? (
+        <div className="l-tool-test-body">
+          {tool.parameters.length > 0 ? (
+            tool.parameters.map((p) => (
+              <div className="l-field" key={p.name}>
+                <label>{p.name || "(unnamed parameter)"}</label>
+                <input
+                  type="text"
+                  value={args[p.name] ?? ""}
+                  placeholder={p.description || `sample ${p.name}`}
+                  onChange={(e) => setArgs((prev) => ({ ...prev, [p.name]: e.target.value }))}
+                />
+              </div>
+            ))
+          ) : (
+            <p className="l-connector-note">This tool takes no parameters.</p>
+          )}
+          <button type="button" className="l-btn l-btn-ghost" disabled={busy} onClick={() => void run()}>
+            {busy ? "Running…" : "Run"}
+          </button>
+          {result ? (
+            <>
+              <p className={`l-tool-test-status ${result.ok ? "l-ok" : "l-fail"}`}>
+                {result.ok ? `Success${result.ms != null ? ` in ${result.ms} ms` : ""}` : "Failed"}
+              </p>
+              <pre className="l-tool-test-output">{result.text.slice(0, 4000)}</pre>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function newParam(): ToolParameter {
@@ -332,6 +443,36 @@ function ToolEditor({ tools, onChange }: { tools: ToolConfig[]; onChange: (tools
                     + Add parameter
                   </button>
                 </div>
+
+                <div className="l-field">
+                  <label>Headers (one per line) — for API keys and auth</label>
+                  <textarea
+                    rows={2}
+                    spellCheck={false}
+                    value={headersToText(tool.headers)}
+                    onChange={(e) => updateTool(tool.id, { headers: textToHeaders(e.target.value) })}
+                    placeholder={"Authorization: Bearer your-api-key\nX-Api-Key: abc123"}
+                  />
+                  <p className="l-connector-note">
+                    {"{param}"} works here too. Anyone who can open this agent can read these
+                    values, so use a key scoped to just what the agent needs.
+                  </p>
+                </div>
+
+                {tool.method !== "GET" ? (
+                  <div className="l-field">
+                    <label>Request body (JSON) — {"{param}"} inserts a parameter</label>
+                    <textarea
+                      rows={3}
+                      spellCheck={false}
+                      value={tool.body_template ?? ""}
+                      onChange={(e) => updateTool(tool.id, { body_template: e.target.value || null })}
+                      placeholder={'{"subject": "{subject}", "source": "avatar"}'}
+                    />
+                  </div>
+                ) : null}
+
+                <ToolTester tool={tool} />
               </>
             )}
           </div>

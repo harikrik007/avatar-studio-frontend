@@ -1283,6 +1283,47 @@
   flex-wrap: wrap;
 }
 
+/* --- per-tool dry run --- */
+
+.landing .l-tool-test {
+  margin-top: 12px;
+  border-top: 1px solid var(--l-border);
+  padding-top: 10px;
+}
+
+.landing .l-tool-test-body {
+  margin-top: 8px;
+}
+
+.landing .l-tool-test-status {
+  font-size: var(--l-fs-helper);
+  margin: 10px 0 4px;
+}
+
+.landing .l-tool-test-status.l-ok {
+  color: #7ee2a8;
+}
+
+.landing .l-tool-test-status.l-fail {
+  color: #ff9d9d;
+}
+
+.landing .l-tool-test-output {
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--l-border);
+  border-radius: 8px;
+  background: var(--l-bg);
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  /* Raw API responses are one long line as often as not. */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* --- knowledge files --- */
 
 .landing .l-doc-list {
