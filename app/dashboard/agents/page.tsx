@@ -15,15 +15,35 @@ type ToolParameter = {
   required: boolean;
 };
 
+type ToolType = "http_request" | "tavily_search";
+
 type ToolConfig = {
   id: string;
-  type: "http_request";
+  type: ToolType;
   name: string;
   description: string;
   parameters: ToolParameter[];
   method: string;
   url: string;
   headers: Record<string, string>;
+};
+
+// Built-in connectors: zero-config beyond a name -- realtime-avatar's
+// agent/connectors.py already knows how to run these server-side, so the
+// dashboard only needs to know their label and sensible defaults, not a
+// URL/method/headers form. Custom "http_request" stays the general escape
+// hatch for a business's own API.
+const CONNECTOR_PRESETS: Record<ToolType, { label: string; defaultName: string; defaultDescription: string }> = {
+  http_request: {
+    label: "Custom API call",
+    defaultName: "",
+    defaultDescription: "",
+  },
+  tavily_search: {
+    label: "Web search (Tavily)",
+    defaultName: "web_search",
+    defaultDescription: "Search the web for current, up-to-date information.",
+  },
 };
 
 type Agent = {
@@ -36,12 +56,13 @@ type Agent = {
   created_at: string;
 };
 
-function newTool(): ToolConfig {
+function newTool(type: ToolType = "http_request"): ToolConfig {
+  const preset = CONNECTOR_PRESETS[type];
   return {
     id: crypto.randomUUID(),
-    type: "http_request",
-    name: "",
-    description: "",
+    type,
+    name: preset.defaultName,
+    description: preset.defaultDescription,
     parameters: [],
     method: "GET",
     url: "",
@@ -167,91 +188,113 @@ function ToolEditor({ tools, onChange }: { tools: ToolConfig[]; onChange: (tools
 
   return (
     <div className="l-tool-list">
-      {tools.map((tool) => (
-        <div className="l-tool-card" key={tool.id}>
-          <div className="l-tool-card-header">
-            <span className="l-kicker">API call</span>
-            <button type="button" className="l-btn-delete" onClick={() => removeTool(tool.id)}>
-              Remove
-            </button>
-          </div>
-          <div className="l-field">
-            <label>Function name (what the agent calls it)</label>
-            <input
-              type="text"
-              value={tool.name}
-              onChange={(e) => updateTool(tool.id, { name: e.target.value })}
-              placeholder="check_availability"
-            />
-          </div>
-          <div className="l-field">
-            <label>Description (tells the agent when to use this)</label>
-            <input
-              type="text"
-              value={tool.description}
-              onChange={(e) => updateTool(tool.id, { description: e.target.value })}
-              placeholder="Check appointment availability for a given date"
-            />
-          </div>
-          <div className="l-tool-row">
-            <div className="l-field" style={{ flex: "0 0 110px" }}>
-              <label>Method</label>
-              <select value={tool.method} onChange={(e) => updateTool(tool.id, { method: e.target.value })}>
-                <option>GET</option>
-                <option>POST</option>
-                <option>PUT</option>
-                <option>DELETE</option>
-              </select>
+      {tools.map((tool) => {
+        const isCustom = tool.type === "http_request";
+        return (
+          <div className="l-tool-card" key={tool.id}>
+            <div className="l-tool-card-header">
+              <span className="l-kicker">{CONNECTOR_PRESETS[tool.type].label}</span>
+              <button type="button" className="l-btn-delete" onClick={() => removeTool(tool.id)}>
+                Remove
+              </button>
             </div>
-            <div className="l-field" style={{ flex: 1 }}>
-              <label>URL (use {"{param}"} to insert a parameter)</label>
+            <div className="l-field">
+              <label>Function name (what the agent calls it)</label>
               <input
                 type="text"
-                value={tool.url}
-                onChange={(e) => updateTool(tool.id, { url: e.target.value })}
-                placeholder="https://api.example.com/availability?date={date}"
+                value={tool.name}
+                onChange={(e) => updateTool(tool.id, { name: e.target.value })}
+                placeholder="check_availability"
               />
             </div>
-          </div>
+            <div className="l-field">
+              <label>Description (tells the agent when to use this)</label>
+              <input
+                type="text"
+                value={tool.description}
+                onChange={(e) => updateTool(tool.id, { description: e.target.value })}
+                placeholder="Check appointment availability for a given date"
+              />
+            </div>
 
-          <div className="l-field">
-            <label>Parameters</label>
-            {tool.parameters.map((param, i) => (
-              <div className="l-param-row" key={i}>
-                <input
-                  type="text"
-                  value={param.name}
-                  onChange={(e) => updateParam(tool.id, i, { name: e.target.value })}
-                  placeholder="date"
-                />
-                <input
-                  type="text"
-                  value={param.description}
-                  onChange={(e) => updateParam(tool.id, i, { description: e.target.value })}
-                  placeholder="Date in YYYY-MM-DD"
-                />
-                <label className="l-param-required">
-                  <input
-                    type="checkbox"
-                    checked={param.required}
-                    onChange={(e) => updateParam(tool.id, i, { required: e.target.checked })}
-                  />
-                  required
-                </label>
-                <button type="button" className="l-btn-delete" onClick={() => removeParam(tool.id, i)}>
-                  &times;
-                </button>
-              </div>
-            ))}
-            <button type="button" className="l-btn-expand" onClick={() => addParam(tool.id)}>
-              + Add parameter
-            </button>
+            {!isCustom ? (
+              <p className="l-connector-note">
+                Built-in connector -- no setup needed beyond the name and description above. The
+                agent will pass its own search query automatically.
+              </p>
+            ) : (
+              <>
+                <div className="l-tool-row">
+                  <div className="l-field" style={{ flex: "0 0 110px" }}>
+                    <label>Method</label>
+                    <select value={tool.method} onChange={(e) => updateTool(tool.id, { method: e.target.value })}>
+                      <option>GET</option>
+                      <option>POST</option>
+                      <option>PUT</option>
+                      <option>DELETE</option>
+                    </select>
+                  </div>
+                  <div className="l-field" style={{ flex: 1 }}>
+                    <label>URL (use {"{param}"} to insert a parameter)</label>
+                    <input
+                      type="text"
+                      value={tool.url}
+                      onChange={(e) => updateTool(tool.id, { url: e.target.value })}
+                      placeholder="https://api.example.com/availability?date={date}"
+                    />
+                  </div>
+                </div>
+
+                <div className="l-field">
+                  <label>Parameters</label>
+                  {tool.parameters.map((param, i) => (
+                    <div className="l-param-row" key={i}>
+                      <input
+                        type="text"
+                        value={param.name}
+                        onChange={(e) => updateParam(tool.id, i, { name: e.target.value })}
+                        placeholder="date"
+                      />
+                      <input
+                        type="text"
+                        value={param.description}
+                        onChange={(e) => updateParam(tool.id, i, { description: e.target.value })}
+                        placeholder="Date in YYYY-MM-DD"
+                      />
+                      <label className="l-param-required">
+                        <input
+                          type="checkbox"
+                          checked={param.required}
+                          onChange={(e) => updateParam(tool.id, i, { required: e.target.checked })}
+                        />
+                        required
+                      </label>
+                      <button type="button" className="l-btn-delete" onClick={() => removeParam(tool.id, i)}>
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" className="l-btn-expand" onClick={() => addParam(tool.id)}>
+                    + Add parameter
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-        </div>
-      ))}
-      <button type="button" className="l-btn l-btn-ghost" onClick={() => onChange([...tools, newTool()])}>
-        + Add API call tool
-      </button>
+        );
+      })}
+      <div className="l-tool-add-row">
+        <button type="button" className="l-btn l-btn-ghost" onClick={() => onChange([...tools, newTool("http_request")])}>
+          + Add API call tool
+        </button>
+        <button
+          type="button"
+          className="l-btn l-btn-ghost"
+          onClick={() => onChange([...tools, newTool("tavily_search")])}
+        >
+          + Add web search (Tavily)
+        </button>
+      </div>
     </div>
   );
 }
