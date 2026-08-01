@@ -678,6 +678,7 @@
   border: 1px solid var(--l-border);
   border-radius: 14px;
   font-family: inherit;
+  color: inherit;
   text-align: left;
   cursor: pointer;
   transition: border-color 0.15s ease;
