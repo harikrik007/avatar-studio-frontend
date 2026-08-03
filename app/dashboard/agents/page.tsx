@@ -96,19 +96,33 @@ type EmbedKey = {
   greeting_label: string;
 };
 
+type Deployment = {
+  role: "primary" | "scaleout";
+  status: "provisioning" | "running" | "draining" | "stopping" | "stopped" | "failed";
+  status_detail: string | null;
+  max_concurrent_sessions: number;
+};
+
 type Agent = {
   id: string;
   avatar_id: string;
   name: string;
   system_prompt: string;
   tools_json: ToolConfig[];
-  status: "draft" | "live";
+  // "provisioning" is server-derived only -- set while a real RunPod pod is
+  // booting after Make live was clicked (see backend's _set_agent_live).
+  // Never sent by this dashboard as a PATCH value.
+  status: "draft" | "provisioning" | "live";
   created_at: string;
   documents: AgentDocument[];
   // Set once the agent has been made live at least once -- see the
   // backend's update_agent/_set_agent_live (api/main.py). null for an
   // agent that has never gone live, not an empty/inactive placeholder.
   embed: EmbedKey | null;
+  // The primary Deployment behind this agent, if any -- null for
+  // box-hosted demo avatars (RingMe/pizza3/bank) even while status="live",
+  // and null before the first Make live click.
+  deployment: Deployment | null;
 };
 
 const DOC_EXTENSIONS = ".pdf,.txt,.md,.csv,.docx";
@@ -237,6 +251,27 @@ export default function AgentsPage() {
     void refresh();
   }, [refresh]);
 
+  // Poll while a real RunPod pod is booting for a just-made-live agent
+  // (30-90s+) -- same pattern as dashboard/avatars/page.tsx polling while
+  // an avatar is uploading/processing, since this is the same shape of
+  // problem: a slow background operation the dashboard finds out about by
+  // asking again, not by pushing.
+  useEffect(() => {
+    const anyProvisioning = agents.some((a) => a.status === "provisioning");
+    if (!anyProvisioning) return;
+    const interval = setInterval(refresh, 3000);
+    return () => clearInterval(interval);
+  }, [agents, refresh]);
+
+  // Keep the open dialog's data in sync with polling -- e.g. a provisioning
+  // agent the user is looking at flips to live without them having to close
+  // and reopen it.
+  useEffect(() => {
+    if (!selected) return;
+    const fresh = agents.find((a) => a.id === selected.id);
+    if (fresh && fresh !== selected) setSelected(fresh);
+  }, [agents, selected]);
+
   const readyAvatars = avatars.filter((a) => a.status === "ready");
 
   return (
@@ -312,6 +347,18 @@ export default function AgentsPage() {
   );
 }
 
+function agentStatusLabel(status: Agent["status"]): string {
+  if (status === "live") return "Live";
+  if (status === "provisioning") return "Starting…";
+  return "Draft";
+}
+
+function agentStatusBadgeClass(status: Agent["status"]): string {
+  if (status === "live") return "l-status-ready";
+  if (status === "provisioning") return "l-status-processing";
+  return "l-status-uploading";
+}
+
 function AgentRow({ agent, avatars, onOpen }: { agent: Agent; avatars: Avatar[]; onOpen: () => void }) {
   const avatar = avatars.find((a) => a.id === agent.avatar_id);
   return (
@@ -333,8 +380,8 @@ function AgentRow({ agent, avatars, onOpen }: { agent: Agent; avatars: Avatar[];
         </div>
       </div>
       <div className="l-avatar-row-end">
-        <span className={`l-status-badge ${agent.status === "live" ? "l-status-ready" : "l-status-uploading"}`}>
-          {agent.status === "live" ? "Live" : "Draft"}
+        <span className={`l-status-badge ${agentStatusBadgeClass(agent.status)}`}>
+          {agentStatusLabel(agent.status)}
         </span>
         <RowChevron />
       </div>
@@ -1036,12 +1083,12 @@ function LiveTestPanel({
 function EmbedWidgetPanel({
   agentId,
   embed,
-  live,
+  status,
   onChanged,
 }: {
   agentId: string;
   embed: EmbedKey;
-  live: boolean;
+  status: Agent["status"];
   onChanged: () => void;
 }) {
   const [origins, setOrigins] = useState(embed.allowed_origins.join("\n"));
@@ -1095,9 +1142,11 @@ function EmbedWidgetPanel({
     <div className="l-embed-panel" style={{ marginTop: 16, padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
       <p style={{ fontWeight: 600, margin: 0 }}>Embeddable chat widget</p>
       <p className="l-connector-note" style={{ marginTop: 4 }}>
-        {live
+        {status === "live"
           ? "Anyone on an allowed website below can talk to this agent through a chat bubble."
-          : "This widget is offline while the agent is in Draft — take it live to reactivate it. The install snippet below still works once you do; nothing needs to change on the customer's site."}
+          : status === "provisioning"
+            ? "Starting up — the widget will go live automatically in about a minute, with no further action needed here."
+            : "This widget is offline while the agent is in Draft — take it live to reactivate it. The install snippet below still works once you do; nothing needs to change on the customer's site."}
       </p>
 
       <label style={{ display: "block", marginTop: 12, fontSize: 13, fontWeight: 600 }}>
@@ -1165,6 +1214,7 @@ function AgentDialog({
   const [tools, setTools] = useState<ToolConfig[]>([]);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -1177,6 +1227,7 @@ function AgentDialog({
     } else {
       dialog.close();
       setTesting(false);
+      setStatusError(null);
     }
   }, [agent]);
 
@@ -1185,13 +1236,28 @@ function AgentDialog({
   async function save(patch: Partial<{ name: string; system_prompt: string; tools: ToolConfig[]; status: string }>) {
     if (!agent) return;
     setBusy(true);
+    if (patch.status) setStatusError(null);
     const res = await fetch(`/api/agents/${agent.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
     setBusy(false);
-    if (res.ok) onChanged();
+    if (res.ok) {
+      onChanged();
+      return;
+    }
+    if (patch.status) {
+      // Real, common failure here: no persistent GPU serving configured
+      // for this avatar yet, or RunPod couldn't provision a pod right now
+      // (capacity/connectivity) -- see backend's _set_agent_live. This
+      // used to fail completely silently (button just stopped spinning).
+      // The proxy route forwards FastAPI's raw body, so the message is
+      // under `detail`, not `error` (unlike this dashboard's other proxy
+      // routes, which reshape it -- see app/api/agents/[id]/route.ts).
+      const payload = await res.json().catch(() => null);
+      setStatusError(payload?.detail ?? "Couldn't change this agent's live status. Try again shortly.");
+    }
   }
 
   async function handleDelete() {
@@ -1233,8 +1299,8 @@ function AgentDialog({
           <div className="l-avatar-dialog-body l-agent-dialog-config">
             <div className="l-avatar-dialog-header">
               <h2>{agent.name}</h2>
-              <span className={`l-status-badge ${agent.status === "live" ? "l-status-ready" : "l-status-uploading"}`}>
-                {agent.status === "live" ? "Live" : "Draft"}
+              <span className={`l-status-badge ${agentStatusBadgeClass(agent.status)}`}>
+                {agentStatusLabel(agent.status)}
               </span>
             </div>
             <div className="l-avatar-meta">Built from {avatar ? avatar.name : "an avatar"}</div>
@@ -1283,18 +1349,41 @@ function AgentDialog({
               <button
                 type="button"
                 className="l-btn l-btn-ghost"
-                disabled={busy}
-                onClick={() => save({ status: agent.status === "live" ? "draft" : "live" })}
+                disabled={busy || agent.status === "provisioning"}
+                onClick={() => save({ status: agent.status === "draft" ? "live" : "draft" })}
               >
-                {agent.status === "live" ? "Take offline" : "Make live"}
+                {agent.status === "provisioning" ? (
+                  <>
+                    <Spinner />
+                    Starting your dedicated server…
+                  </>
+                ) : agent.status === "live" ? (
+                  "Take offline"
+                ) : (
+                  "Make live"
+                )}
               </button>
             </div>
+            {agent.status === "provisioning" ? (
+              <p className="l-connector-note" style={{ marginTop: 8 }}>
+                Provisioning a dedicated GPU server for this agent — this usually takes under
+                two minutes. The widget below goes live automatically the moment it's ready;
+                no need to keep this open.
+              </p>
+            ) : null}
+            {statusError ? (
+              <p className="l-connector-note" style={{ marginTop: 8, color: "#b91c1c" }}>
+                {statusError}
+              </p>
+            ) : null}
             <p className="l-connector-note" style={{ marginTop: 8 }}>
               Test agent talks to a real, temporary live session on our GPU box—your mic
               will be requested. It's separate from making the agent live for your own
               platform.
             </p>
-            {agent.embed ? <EmbedWidgetPanel agentId={agent.id} embed={agent.embed} live={agent.status === "live"} onChanged={onChanged} /> : null}
+            {agent.embed ? (
+              <EmbedWidgetPanel agentId={agent.id} embed={agent.embed} status={agent.status} onChanged={onChanged} />
+            ) : null}
             <button type="button" className="l-btn-delete l-dialog-delete" onClick={handleDelete}>
               Delete agent
             </button>
