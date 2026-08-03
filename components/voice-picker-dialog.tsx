@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { VOICE_CATALOG, type VoiceTag } from "@/lib/voices";
 
 const FILTERS: (VoiceTag | "All")[] = ["All", "Male", "Female", "British"];
@@ -25,6 +26,15 @@ export function VoicePickerDialog({
   const [filter, setFilter] = useState<VoiceTag | "All">("All");
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
+  // Portaled to document.body rather than rendered in place: this dialog is
+  // opened from AgentDialog/CreateAgentForm, which is itself a native
+  // <dialog> when editing an existing agent. Two native <dialog> elements
+  // nested in the DOM (not just visually layered) is a real, reproduced
+  // bug -- closing the inner one also fires a close event on the outer
+  // one, silently discarding the whole agent form. Portaling makes this
+  // dialog a DOM *sibling* of the outer one instead of a descendant.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -77,7 +87,9 @@ export function VoicePickerDialog({
     }
   }
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <dialog ref={dialogRef} className="l-voice-picker" onClose={onClose} onCancel={onClose}>
       <button type="button" className="l-dialog-close" onClick={onClose} aria-label="Close">
         &times;
@@ -159,6 +171,7 @@ export function VoicePickerDialog({
       </div>
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio ref={audioRef} onEnded={() => setPlayingId(null)} />
-    </dialog>
+    </dialog>,
+    document.body
   );
 }

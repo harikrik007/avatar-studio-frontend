@@ -1327,8 +1327,25 @@ function AgentDialog({
     }
   }
 
+  // React bubbles a <dialog>'s close/cancel events through the *React
+  // component tree*, not the real DOM -- so VoicePickerDialog's own
+  // dialog (portaled to document.body, a real DOM sibling of this one)
+  // still shows up here as a bubbled event, since it's still a React
+  // child of this component. e.target !== e.currentTarget is how to tell
+  // "some descendant dialog closed" apart from "this dialog itself
+  // closed" -- confirmed via a real repro: without this check, picking a
+  // voice silently closed the whole agent editor.
+  function onOuterDialogClose(e: React.SyntheticEvent<HTMLDialogElement>) {
+    if (e.target === e.currentTarget) onClose();
+  }
+
   return (
-    <dialog ref={dialogRef} className="l-avatar-dialog l-agent-dialog" onClose={onClose} onCancel={onClose}>
+    <dialog
+      ref={dialogRef}
+      className="l-avatar-dialog l-agent-dialog"
+      onClose={onOuterDialogClose}
+      onCancel={onOuterDialogClose}
+    >
       {agent ? (
         <>
           <button type="button" className="l-dialog-close" onClick={onClose} aria-label="Close">
