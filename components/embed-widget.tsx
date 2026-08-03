@@ -28,9 +28,10 @@ type Props = {
   accentColor: string;
   greetingLabel: string;
   origin?: string;
+  previewVideoUrl?: string | null;
 };
 
-export function EmbedWidget({ publicKey, accentColor, greetingLabel, origin }: Props) {
+export function EmbedWidget({ publicKey, accentColor, greetingLabel, origin, previewVideoUrl }: Props) {
   const [status, setStatus] = useState<Status>("checking");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>(greetingLabel);
@@ -223,6 +224,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, origin }: P
           isConnected={isConnected}
           width={220}
           height={260}
+          idleVideoSrc={previewVideoUrl ?? undefined}
         />
         {isSpeaking ? <span style={{ ...speakingDotStyle, background: accentColor }} /> : null}
       </div>
