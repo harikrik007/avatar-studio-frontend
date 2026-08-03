@@ -276,6 +276,20 @@ export function DemoAvatarsSection() {
     setCardStatus(key, "idle");
   }
 
+  // The connected card becomes the visual focus: it moves into the center
+  // grid slot (order 1 of 3) via CSS `order`, not by reordering the DOM --
+  // reordering the actual elements would remount LiveKitFace's <video>,
+  // interrupting the live track. The other two keep their original
+  // relative order on whichever side is left, so a second card taking
+  // focus doesn't also shuffle which side the first one recedes to.
+  const activeIndex = activeKey ? DEMO_AGENTS.findIndex((a) => a.key === activeKey) : -1;
+  function cardOrder(index: number, focusIndex: number): number {
+    if (focusIndex === -1) return index;
+    if (index === focusIndex) return 1;
+    const others = DEMO_AGENTS.map((_, i) => i).filter((i) => i !== focusIndex);
+    return others.indexOf(index) === 0 ? 0 : 2;
+  }
+
   return (
     <section className="l-section" id="try-avatars">
       <div className="l-section-title l-center">
@@ -288,12 +302,16 @@ export function DemoAvatarsSection() {
       </div>
 
       <div className="l-demo-grid">
-        {DEMO_AGENTS.map((agent) => {
+        {DEMO_AGENTS.map((agent, index) => {
           const status = statuses[agent.key] ?? "idle";
           const isActive = activeKey === agent.key;
 
           return (
-            <div className="l-demo-card" key={agent.key}>
+            <div
+              className={`l-demo-card${isActive ? " l-demo-card-focused" : activeKey ? " l-demo-card-receded" : ""}`}
+              style={{ order: cardOrder(index, activeIndex) }}
+              key={agent.key}
+            >
               <div className="l-demo-stage">
                 <LiveKitFace
                   videoTrack={isActive ? videoTrack : null}

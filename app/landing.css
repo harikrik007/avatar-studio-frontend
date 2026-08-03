@@ -419,6 +419,24 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
+  transition: transform 0.35s ease, opacity 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+/* The connected card becomes the visual focus -- moved into the center
+   grid slot via `order` (set inline, see demo-avatars-section.tsx) and
+   made to visibly stand out; the other two recede rather than just sitting
+   there unchanged, so the active conversation reads as the obvious point
+   of attention. */
+.landing .l-demo-card-focused {
+  transform: scale(1.045);
+  border-color: var(--l-accent);
+  box-shadow: 0 0 0 1px var(--l-accent), 0 20px 48px rgba(0, 195, 255, 0.22);
+  z-index: 2;
+}
+
+.landing .l-demo-card-receded {
+  transform: scale(0.96);
+  opacity: 0.6;
 }
 
 .landing .l-demo-stage {
