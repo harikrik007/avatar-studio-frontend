@@ -87,6 +87,15 @@ type AgentDocument = {
   created_at: string;
 };
 
+type EmbedKey = {
+  public_key: string;
+  allowed_origins: string[];
+  is_active: boolean;
+  max_concurrent: number;
+  accent_color: string;
+  greeting_label: string;
+};
+
 type Agent = {
   id: string;
   avatar_id: string;
@@ -96,6 +105,10 @@ type Agent = {
   status: "draft" | "live";
   created_at: string;
   documents: AgentDocument[];
+  // Set once the agent has been made live at least once -- see the
+  // backend's update_agent/_set_agent_live (api/main.py). null for an
+  // agent that has never gone live, not an empty/inactive placeholder.
+  embed: EmbedKey | null;
 };
 
 const DOC_EXTENSIONS = ".pdf,.txt,.md,.csv,.docx";
@@ -1020,6 +1033,121 @@ function LiveTestPanel({
   );
 }
 
+function EmbedWidgetPanel({
+  agentId,
+  embed,
+  live,
+  onChanged,
+}: {
+  agentId: string;
+  embed: EmbedKey;
+  live: boolean;
+  onChanged: () => void;
+}) {
+  const [origins, setOrigins] = useState(embed.allowed_origins.join("\n"));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [studioOrigin, setStudioOrigin] = useState("");
+
+  useEffect(() => {
+    // window.location isn't available during SSR -- the snippet has to
+    // point at wherever this dashboard is actually being served from
+    // (staging, production, a future domain), never a hardcoded value.
+    setStudioOrigin(window.location.origin);
+  }, []);
+
+  useEffect(() => {
+    setOrigins(embed.allowed_origins.join("\n"));
+  }, [embed.allowed_origins]);
+
+  const snippet = `<script src="${studioOrigin}/widget.js" data-key="${embed.public_key}"></script>`;
+
+  async function saveOrigins() {
+    setBusy(true);
+    setError(null);
+    const list = origins
+      .split(/[\n,]/)
+      .map((o) => o.trim())
+      .filter(Boolean);
+    const res = await fetch(`/api/agents/${agentId}/embed`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ allowed_origins: list }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      onChanged();
+    } else {
+      const payload = await res.json().catch(() => null);
+      setError(payload?.error ?? "Unable to save the allowed websites.");
+    }
+  }
+
+  function copySnippet() {
+    void navigator.clipboard.writeText(snippet).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="l-embed-panel" style={{ marginTop: 16, padding: 16, border: "1px solid #e5e7eb", borderRadius: 12 }}>
+      <p style={{ fontWeight: 600, margin: 0 }}>Embeddable chat widget</p>
+      <p className="l-connector-note" style={{ marginTop: 4 }}>
+        {live
+          ? "Anyone on an allowed website below can talk to this agent through a chat bubble."
+          : "This widget is offline while the agent is in Draft — take it live to reactivate it. The install snippet below still works once you do; nothing needs to change on the customer's site."}
+      </p>
+
+      <label style={{ display: "block", marginTop: 12, fontSize: 13, fontWeight: 600 }}>
+        Allowed websites (one per line, e.g. https://example.com — no trailing slash)
+      </label>
+      <textarea
+        className="l-input"
+        rows={3}
+        value={origins}
+        onChange={(e) => setOrigins(e.target.value)}
+        placeholder="https://example.com"
+        style={{ width: "100%", fontFamily: "monospace", fontSize: 12 }}
+      />
+      {embed.allowed_origins.length === 0 ? (
+        <p className="l-connector-note" style={{ color: "#b45309" }}>
+          No website is allowed yet — the widget will not render anywhere until you add one.
+        </p>
+      ) : null}
+      {error ? <p className="l-connector-note" style={{ color: "#b91c1c" }}>{error}</p> : null}
+      <button type="button" className="l-btn l-btn-ghost" disabled={busy} onClick={() => void saveOrigins()} style={{ marginTop: 8 }}>
+        {busy ? "Saving…" : "Save allowed websites"}
+      </button>
+
+      <label style={{ display: "block", marginTop: 16, fontSize: 13, fontWeight: 600 }}>
+        Install snippet
+      </label>
+      <pre
+        style={{
+          background: "#0b0f14",
+          color: "#e5e7eb",
+          padding: 10,
+          borderRadius: 8,
+          fontSize: 12,
+          overflowX: "auto",
+          margin: "6px 0",
+        }}
+      >
+        {snippet}
+      </pre>
+      <button type="button" className="l-btn l-btn-ghost" onClick={copySnippet}>
+        {copied ? "Copied!" : "Copy snippet"}
+      </button>
+      <p className="l-connector-note" style={{ marginTop: 8 }}>
+        Paste this into the HTML of any website listed above. It only starts talking to this
+        agent — pricing/plans/etc. text is whatever this agent's own instructions say.
+      </p>
+    </div>
+  );
+}
+
 function AgentDialog({
   agent,
   avatars,
@@ -1166,6 +1294,7 @@ function AgentDialog({
               will be requested. It's separate from making the agent live for your own
               platform.
             </p>
+            {agent.embed ? <EmbedWidgetPanel agentId={agent.id} embed={agent.embed} live={agent.status === "live"} onChanged={onChanged} /> : null}
             <button type="button" className="l-btn-delete l-dialog-delete" onClick={handleDelete}>
               Delete agent
             </button>
