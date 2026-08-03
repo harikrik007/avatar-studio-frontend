@@ -85,6 +85,7 @@ export default function LandingPage() {
       <nav className="l-nav">
         <span className="l-brand">Avatar Studio</span>
         <div className="l-nav-links">
+          <a href="#try-avatars">Try live avatar</a>
           <Link href="/pricing">Pricing</Link>
           <Link href="/dashboard" className="l-btn l-btn-primary">
             Get started

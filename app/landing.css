@@ -110,6 +110,14 @@
   }
 }
 
+/* Smooth-scrolls the in-page "Try live avatar" nav link down to
+   DemoAvatarsSection (#try-avatars) instead of an instant jump. Scoped to
+   this file's own load (only mounted on the landing route), same as every
+   other .landing-prefixed rule here. */
+html {
+  scroll-behavior: smooth;
+}
+
 /* --- nav --- */
 
 .landing .l-nav {
