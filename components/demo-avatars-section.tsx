@@ -180,6 +180,241 @@ function executeRingmeToolCall(call: AvatarToolCall): Record<string, unknown> {
   return { success: false, error: "Not available in this demo." };
 }
 
+// Mirrors Pizza Orbit's own demo menu + cart logic
+// (pizza_wav2lip_client/lib/ringme-content.ts, .../components/voice-
+// assistant-demo.tsx's executeToolCall/addItemToCart/removeFromCart) so
+// add_to_cart/remove_from_cart/view_cart/calculate_cart_total answer for
+// real instead of the stub -- Chef Mozza's own system prompt explicitly
+// says "never say an item was added, removed, or totaled unless the tool
+// response confirms it," so a stubbed failure was making her stall and
+// then confirm anyway, contradicting her own instructions. Cart state
+// lives in a ref on the section component (see cartRef below), reset each
+// time a fresh Pizza session starts. Real pizza3.agentbaba.ai is untouched.
+type PizzaMenuItem = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: "Veg" | "Chicken" | "Classic";
+  aliases: string[];
+};
+type PizzaAddition = { id: string; name: string; price: number };
+type PizzaCartLine = { id: string; item: PizzaMenuItem; quantity: number; additions: PizzaAddition[] };
+
+const PIZZA_ADDITIONS: PizzaAddition[] = [
+  { id: "extra-cheese", name: "Extra Cheese", price: 70 },
+  { id: "stuffed-crust", name: "Stuffed Crust", price: 120 },
+  { id: "olives", name: "Black Olives", price: 55 },
+  { id: "jalapenos", name: "Jalapenos", price: 45 },
+  { id: "mushrooms", name: "Sauteed Mushrooms", price: 60 },
+  { id: "paneer", name: "Paneer Cubes", price: 90 },
+  { id: "chicken", name: "Smoked Chicken", price: 110 },
+  { id: "burrata", name: "Burrata Finish", price: 150 },
+];
+
+const PIZZA_MENU: PizzaMenuItem[] = [
+  { id: "margherita-melt", name: "Margherita Melt", description: "San Marzano tomato sauce, mozzarella, basil ribbons, and garlic oil.", price: 249, category: "Classic", aliases: ["margherita", "margarita", "margherita pizza", "margarita pizza", "melt"] },
+  { id: "farmhouse-crunch", name: "Farmhouse Crunch", description: "Onion, capsicum, tomato, sweet corn, and oregano crust dust.", price: 289, category: "Veg", aliases: ["farmhouse", "veggie farmhouse"] },
+  { id: "tandoori-paneer-fire", name: "Tandoori Paneer Fire", description: "Smoky paneer tikka, red onion, mint drizzle, and roasted peppers.", price: 359, category: "Veg", aliases: ["tandoori paneer", "paneer fire"] },
+  { id: "pepperoni-feast", name: "Pepperoni Feast", description: "Crisped pepperoni, mozzarella, tomato sauce, and parmesan snow.", price: 379, category: "Classic", aliases: ["pepperoni", "feast"] },
+  { id: "corn-cheese-carnival", name: "Corn Cheese Carnival", description: "Sweet corn, stretchy cheese, herb butter, and chili flakes.", price: 279, category: "Veg", aliases: ["corn cheese", "carnival"] },
+  { id: "bbq-chicken-burst", name: "BBQ Chicken Burst", description: "BBQ chicken, caramelized onions, mozzarella, and smoky drizzle.", price: 389, category: "Chicken", aliases: ["bbq chicken", "burst"] },
+  { id: "spicy-desi-tikka-blast", name: "Spicy Desi Tikka Blast", description: "Fiery tikka sauce, paneer, onion, green chili, and coriander.", price: 369, category: "Veg", aliases: ["desi tikka", "tikka blast"] },
+  { id: "mushroom-truffle-pop", name: "Mushroom Truffle Pop", description: "Roasted mushrooms, mozzarella, cream sauce, and truffle finish.", price: 399, category: "Veg", aliases: ["mushroom truffle", "truffle pop"] },
+  { id: "peri-peri-veggie", name: "Peri Peri Veggie", description: "Peri peri sauce, peppers, onion, corn, olives, and chili oil.", price: 329, category: "Veg", aliases: ["peri peri veggie", "peri veggie"] },
+  { id: "classic-cheese-overload", name: "Classic Cheese Overload", description: "Mozzarella, cheddar, gouda blend, and bubbling cheese crust.", price: 319, category: "Classic", aliases: ["cheese overload", "cheese pizza"] },
+  { id: "fiery-chicken-mexicana", name: "Fiery Chicken Mexicana", description: "Spiced chicken, jalapenos, corn salsa, paprika, and chipotle mayo.", price: 409, category: "Chicken", aliases: ["mexicana", "fiery chicken"] },
+  { id: "garden-pesto-swirl", name: "Garden Pesto Swirl", description: "Pesto base, cherry tomato, zucchini, feta, and basil crunch.", price: 349, category: "Veg", aliases: ["pesto", "garden pesto"] },
+  { id: "double-chicken-cheddar", name: "Double Chicken Cheddar", description: "Grilled chicken, cheddar glaze, onion jam, and herb crust.", price: 429, category: "Chicken", aliases: ["double chicken", "cheddar chicken"] },
+  { id: "olive-sunburst", name: "Olive Sunburst", description: "Black olives, roasted garlic, tomato confit, and mozzarella.", price: 309, category: "Veg", aliases: ["olive", "sunburst"] },
+  { id: "paneer-makhani-dream", name: "Paneer Makhani Dream", description: "Makhani sauce, paneer, capsicum, onion, and cream swirl.", price: 379, category: "Veg", aliases: ["paneer makhani", "makhani dream"] },
+  { id: "devils-pepperoni", name: "Devil's Pepperoni", description: "Pepperoni, chili honey, hot sauce, red chili, and pecorino.", price: 419, category: "Classic", aliases: ["devils pepperoni", "hot pepperoni"] },
+  { id: "garlic-alfredo-chicken", name: "Garlic Alfredo Chicken", description: "Creamy alfredo, garlic chicken, spinach, and parmesan rain.", price: 399, category: "Chicken", aliases: ["alfredo chicken", "garlic chicken"] },
+  { id: "veggie-supreme-stack", name: "Veggie Supreme Stack", description: "Mushroom, peppers, onion, olives, corn, and tomato basil sauce.", price: 339, category: "Veg", aliases: ["veggie supreme", "supreme stack"] },
+  { id: "smoked-sausage-street", name: "Smoked Sausage Street", description: "Smoked sausage, bell pepper, onion, mozzarella, and mustard glaze.", price: 389, category: "Classic", aliases: ["sausage", "smoked sausage"] },
+  { id: "burrata-blaze", name: "Burrata Blaze", description: "Cherry tomato sauce, fresh burrata, basil pesto, and chili crisp.", price: 449, category: "Veg", aliases: ["burrata", "blaze"] },
+];
+
+function formatInrWhole(amount: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function findPizzaByName(name: string): PizzaMenuItem | null {
+  const normalized = normalizeToken(name);
+  return (
+    PIZZA_MENU.find((item) => normalizeToken(item.id) === normalized) ??
+    PIZZA_MENU.find((item) => normalizeToken(item.name) === normalized) ??
+    PIZZA_MENU.find((item) => item.aliases.some((a) => normalizeToken(a) === normalized)) ??
+    PIZZA_MENU.find((item) => normalizeToken(item.name).includes(normalized)) ??
+    PIZZA_MENU.find((item) => item.aliases.some((a) => normalizeToken(a).includes(normalized))) ??
+    null
+  );
+}
+
+function findAdditionIds(names: string[]): string[] {
+  const resolved = new Set<string>();
+  for (const raw of names) {
+    const normalized = normalizeToken(raw);
+    const addition = PIZZA_ADDITIONS.find(
+      (a) => normalizeToken(a.name) === normalized || normalizeToken(a.name).includes(normalized)
+    );
+    if (addition) resolved.add(addition.id);
+  }
+  return [...resolved];
+}
+
+function getAdditionKey(additions: PizzaAddition[]) {
+  return additions.map((a) => a.id).sort().join("|");
+}
+
+function getLineTotal(basePrice: number, additions: PizzaAddition[], quantity: number) {
+  return (basePrice + additions.reduce((t, a) => t + a.price, 0)) * quantity;
+}
+
+function clampQuantity(value: number) {
+  return Math.max(1, Math.min(20, Math.floor(value)));
+}
+
+function buildCartSnapshot(cart: PizzaCartLine[]) {
+  const totalItems = cart.reduce((t, e) => t + e.quantity, 0);
+  const subtotal = cart.reduce((t, e) => t + getLineTotal(e.item.price, e.additions, e.quantity), 0);
+  return {
+    totalItems,
+    subtotal,
+    subtotalFormatted: formatInrWhole(subtotal),
+    lines: cart.map((e) => ({
+      pizzaName: e.item.name,
+      quantity: e.quantity,
+      additions: e.additions.map((a) => a.name),
+      lineTotalFormatted: formatInrWhole(getLineTotal(e.item.price, e.additions, e.quantity)),
+    })),
+  };
+}
+
+// Returns the tool response plus the cart's next state; the caller
+// (handleToolCalls) writes that back to cartRef -- kept as a pure function
+// here so it's easy to reason about, unlike the real pizza frontend's
+// version which mutates component state directly.
+function executePizzaToolCall(
+  call: AvatarToolCall,
+  cart: PizzaCartLine[]
+): { response: Record<string, unknown>; nextCart: PizzaCartLine[] } {
+  const args = (call.args ?? {}) as Record<string, unknown>;
+
+  if (call.name === "list_menu") {
+    const rawCategory = typeof args.category === "string" ? args.category : "";
+    const category = (["Veg", "Chicken", "Classic"] as const).includes(rawCategory as never)
+      ? (rawCategory as PizzaMenuItem["category"])
+      : null;
+    const items = category ? PIZZA_MENU.filter((i) => i.category === category) : PIZZA_MENU;
+    return {
+      nextCart: cart,
+      response: {
+        success: true,
+        category: category ?? "All",
+        itemCount: items.length,
+        menu: items.map((i) => ({ name: i.name, category: i.category, price: i.price, priceFormatted: formatInrWhole(i.price), description: i.description })),
+        customerMessage: category ? `Here are the ${category} pizzas.` : "Here is the full pizza menu.",
+      },
+    };
+  }
+
+  if (call.name === "add_to_cart") {
+    const pizzaName = typeof args.pizzaName === "string" ? args.pizzaName.trim() : "";
+    if (!pizzaName) {
+      return { nextCart: cart, response: { success: false, error: "Missing pizza name.", customerMessage: "Please tell me which pizza you'd like to add." } };
+    }
+    const item = findPizzaByName(pizzaName);
+    if (!item) {
+      return { nextCart: cart, response: { success: false, error: `Pizza not found: ${pizzaName}`, customerMessage: `I couldn't match ${pizzaName} on the menu.` } };
+    }
+    const quantity = clampQuantity(typeof args.quantity === "number" ? args.quantity : 1);
+    const additionNames = Array.isArray(args.additions) ? args.additions.filter((a): a is string => typeof a === "string") : [];
+    const additionIds = findAdditionIds(additionNames);
+    const additions = PIZZA_ADDITIONS.filter((a) => additionIds.includes(a.id));
+    const additionKey = getAdditionKey(additions);
+
+    const nextCart = [...cart];
+    const existingIndex = nextCart.findIndex((e) => e.item.id === item.id && getAdditionKey(e.additions) === additionKey);
+    if (existingIndex === -1) {
+      nextCart.push({ id: `${item.id}-${Date.now()}`, item, quantity, additions });
+    } else {
+      nextCart[existingIndex] = { ...nextCart[existingIndex], quantity: nextCart[existingIndex].quantity + quantity };
+    }
+
+    return {
+      nextCart,
+      response: {
+        success: true,
+        added: { pizzaName: item.name, quantity, additions: additions.map((a) => a.name) },
+        cart: buildCartSnapshot(nextCart),
+        customerMessage: `Added ${quantity} ${item.name}${additions.length ? ` with ${additions.map((a) => a.name).join(", ")}` : ""}.`,
+      },
+    };
+  }
+
+  if (call.name === "remove_from_cart") {
+    const pizzaName = typeof args.pizzaName === "string" ? args.pizzaName.trim() : "";
+    if (!pizzaName) {
+      return { nextCart: cart, response: { success: false, error: "Missing pizza name.", customerMessage: "Please tell me which pizza to remove." } };
+    }
+    const item = findPizzaByName(pizzaName);
+    if (!item) {
+      return { nextCart: cart, response: { success: false, error: `Pizza not found: ${pizzaName}`, customerMessage: `I couldn't match ${pizzaName} on the menu.` } };
+    }
+    const requestedQuantity = typeof args.quantity === "number" && args.quantity > 0 ? Math.floor(args.quantity) : Infinity;
+    const matchingCount = cart.reduce((t, e) => (e.item.id === item.id ? t + e.quantity : t), 0);
+    if (!matchingCount) {
+      return { nextCart: cart, response: { success: false, error: `${item.name} is not in the cart.`, cart: buildCartSnapshot(cart), customerMessage: `${item.name} is not in the order yet.` } };
+    }
+    let remaining = requestedQuantity;
+    const nextCart: PizzaCartLine[] = [];
+    for (const entry of cart) {
+      if (entry.item.id !== item.id || remaining <= 0) {
+        nextCart.push(entry);
+        continue;
+      }
+      if (remaining === Infinity || entry.quantity <= remaining) {
+        remaining = remaining === Infinity ? Infinity : remaining - entry.quantity;
+        continue;
+      }
+      nextCart.push({ ...entry, quantity: entry.quantity - remaining });
+      remaining = 0;
+    }
+    const removedQuantity = requestedQuantity === Infinity ? matchingCount : Math.min(matchingCount, requestedQuantity);
+
+    return {
+      nextCart,
+      response: {
+        success: true,
+        removed: { pizzaName: item.name, quantity: removedQuantity },
+        cart: buildCartSnapshot(nextCart),
+        customerMessage: `Removed ${removedQuantity} ${item.name}.`,
+      },
+    };
+  }
+
+  if (call.name === "view_cart" || call.name === "calculate_cart_total") {
+    const snapshot = buildCartSnapshot(cart);
+    return {
+      nextCart: cart,
+      response: {
+        success: true,
+        cart: snapshot,
+        customerMessage: snapshot.totalItems
+          ? `Cart subtotal is ${snapshot.subtotalFormatted} for ${snapshot.totalItems} item${snapshot.totalItems === 1 ? "" : "s"}.`
+          : "The cart is empty right now.",
+      },
+    };
+  }
+
+  return { nextCart: cart, response: { success: false, error: "Not available in this demo." } };
+}
+
 type CardStatus =
   | "idle"
   | "checking"
@@ -219,6 +454,7 @@ export function DemoAvatarsSection() {
   const hardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queuePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pizzaCartRef = useRef<PizzaCartLine[]>([]); // reset per fresh Pizza session, see beginConnect
 
   function setCardStatus(key: string, status: CardStatus) {
     setStatuses((prev) => ({ ...prev, [key]: status }));
@@ -292,17 +528,27 @@ export function DemoAvatarsSection() {
   }
 
   function handleToolCalls(calls: AvatarToolCall[]) {
-    // Bank's check_balance/get_account_details/download_statement and
-    // RingMe's save_contact_details answer for real (see executeBankToolCall
-    // / executeRingmeToolCall above) since both are just data lookups with
-    // no UI dependency. Pizza's cart tools stay stubbed -- add_to_cart/
-    // view_cart/calculate_cart_total need real cart *state*, which this
-    // page doesn't own; Chef Mozza still answers list_menu questions fine
-    // from her own system-prompt knowledge regardless of the tool result.
+    // Bank's check_balance/get_account_details/download_statement, RingMe's
+    // save_contact_details, and Pizza's add_to_cart/remove_from_cart/
+    // view_cart/calculate_cart_total all answer for real now (see the
+    // execute*ToolCall functions above) instead of the blanket stub.
     if (!calls.length || !sessionRef.current) return;
     const kind = DEMO_AGENTS.find((a) => a.key === activeKeyRef.current)?.kind;
-    sessionRef.current.sendToolResponse({
-      functionResponses: calls.map((call) => ({
+
+    let responses: { id?: string; name?: string; response: Record<string, unknown> }[];
+    if (kind === "pizza") {
+      // Processed in order (not calls.map) so a batch like
+      // [add_to_cart, view_cart] sees the cart update in between, matching
+      // how the real pizza frontend's cartItemsRef mutation behaves.
+      let cart = pizzaCartRef.current;
+      responses = calls.map((call) => {
+        const { response, nextCart } = executePizzaToolCall(call, cart);
+        cart = nextCart;
+        return { id: call.id, name: call.name, response };
+      });
+      pizzaCartRef.current = cart;
+    } else {
+      responses = calls.map((call) => ({
         id: call.id,
         name: call.name,
         response:
@@ -311,8 +557,10 @@ export function DemoAvatarsSection() {
             : kind === "ringme"
               ? executeRingmeToolCall(call)
               : { success: false, error: "Not available in this demo." },
-      })),
-    });
+      }));
+    }
+
+    sessionRef.current.sendToolResponse({ functionResponses: responses });
   }
 
   async function beginConnect(agent: DemoAgent) {
@@ -323,6 +571,7 @@ export function DemoAvatarsSection() {
     setErrorMessage(null);
     setCardStatus(agent.key, "connecting");
     setTranscript("Connecting…");
+    if (agent.kind === "pizza") pizzaCartRef.current = [];
 
     const session = await AvatarSession.connect(
       {
