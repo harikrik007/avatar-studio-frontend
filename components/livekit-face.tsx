@@ -10,6 +10,12 @@ type LiveKitFaceProps = {
   isConnected: boolean;
   width?: number;
   height?: number;
+  /** Shown before a real track exists. Defaults to the single generic
+   * placeholder every other caller (dashboard test panel, the third-party
+   * embed widget) already relies on -- pass a specific avatar's own idle
+   * loop (e.g. the demo section, one per real avatar) to avoid every card
+   * showing the same face before connecting. */
+  idleVideoSrc?: string;
 };
 
 /**
@@ -31,7 +37,8 @@ export function LiveKitFace({
   audioTrack,
   isConnected,
   width = 320,
-  height = 320
+  height = 320,
+  idleVideoSrc = "/avatar-idle-loop.webm"
 }: LiveKitFaceProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -86,7 +93,7 @@ export function LiveKitFace({
       />
       {showLive ? null : (
         <video
-          src="/avatar-idle-loop.webm"
+          src={idleVideoSrc}
           autoPlay
           loop
           muted

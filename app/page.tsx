@@ -2,6 +2,7 @@ import Link from "next/link";
 import "./landing.css";
 import { inter, jetbrainsMono, spaceGrotesk } from "./landing-fonts";
 import PricingGrid from "./PricingGrid";
+import { DemoAvatarsSection } from "@/components/demo-avatars-section";
 
 // The same three steps the dashboard's flow rail shows. The landing used to
 // describe the four internal stages of avatar creation instead, which never
@@ -112,6 +113,8 @@ export default function LandingPage() {
           </Link>
         </div>
       </section>
+
+      <DemoAvatarsSection />
 
       <div className="l-pipeline">
         {PIPELINE.map((node, i) => (

@@ -77,6 +77,17 @@ export async function middleware(request: NextRequest) {
     // otherwise get redirected to /login like a real app route.
     return NextResponse.next();
   }
+  if (pathname === "/avatar-idle-loop.webm" || pathname.endsWith("-idle-loop.webm")) {
+    // LiveKitFace's idle placeholder clips (the generic default plus each
+    // demo avatar's own, e.g. pizza-idle-loop.webm) -- rendered inside both
+    // the public /embed/[key] iframe and this landing page's own
+    // unauthenticated "try it live" section, so like widget.js above these
+    // need no session. Confirmed as a real, silent bug: this exact asset
+    // never had a bypass (or even existed as a file) until it was added
+    // here, so every video tag pointed at it was actually loading a 307
+    // redirect to /login's HTML, not a video -- rendered as a blank box.
+    return NextResponse.next();
+  }
 
   if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next();
