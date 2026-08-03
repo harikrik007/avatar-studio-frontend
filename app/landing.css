@@ -1738,6 +1738,242 @@ html {
   border: 1px solid var(--l-border);
 }
 
+/* --- voice row (compact, in the agent form) --- */
+
+.landing .l-voice-row-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--l-border);
+  border-radius: var(--l-radius);
+  background: var(--l-bg-raised-hover);
+}
+
+.landing .l-voice-row-compact .l-voice-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--l-accent-ink);
+  color: var(--l-accent);
+  flex-shrink: 0;
+}
+
+.landing .l-voice-row-compact .l-voice-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.landing .l-voice-row-compact .l-voice-name {
+  font-weight: 600;
+  font-size: var(--l-fs-body);
+}
+
+.landing .l-voice-row-compact .l-voice-descriptor {
+  display: block;
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- voice picker dialog --- */
+
+.landing dialog.l-voice-picker {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  width: min(480px, calc(100vw - 48px));
+  max-height: min(640px, calc(100vh - 48px));
+  padding: 0;
+  border: 1px solid var(--l-border);
+  border-radius: 16px;
+  background: var(--l-bg-raised);
+  color: var(--l-fg);
+  overflow: hidden;
+}
+
+.landing dialog.l-voice-picker::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.landing .l-voice-picker-body {
+  display: flex;
+  flex-direction: column;
+  height: min(640px, calc(100vh - 48px));
+  padding: 20px 20px 12px;
+}
+
+.landing .l-voice-picker-body h3 {
+  font-size: var(--l-fs-heading);
+  font-weight: 700;
+  margin: 0 0 14px;
+}
+
+.landing .l-voice-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.landing .l-voice-filter-pill {
+  font-size: var(--l-fs-helper);
+  padding: 5px 12px;
+  border-radius: 100px;
+  border: 1px solid var(--l-border);
+  background: transparent;
+  color: var(--l-muted);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.landing .l-voice-filter-pill:hover {
+  color: var(--l-fg);
+}
+
+.landing .l-voice-filter-active {
+  background: var(--l-accent-ink);
+  border-color: var(--l-accent);
+  color: var(--l-accent);
+}
+
+.landing .l-voice-list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -8px;
+  padding: 0 8px;
+}
+
+.landing .l-voice-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 8px;
+  border-radius: var(--l-radius);
+  cursor: pointer;
+}
+
+.landing .l-voice-row:hover,
+.landing .l-voice-row-focused {
+  background: var(--l-bg-raised-hover);
+}
+
+.landing .l-voice-row-current {
+  box-shadow: inset 2px 0 0 var(--l-accent);
+}
+
+.landing .l-voice-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--l-border);
+  background: transparent;
+  color: var(--l-muted);
+  cursor: pointer;
+}
+
+.landing .l-voice-play:hover {
+  color: var(--l-fg);
+  border-color: var(--l-fg);
+}
+
+.landing .l-voice-play-active {
+  border-color: var(--l-accent);
+  color: var(--l-accent);
+}
+
+/* The one deliberate flourish here: a play button becomes a tiny animated
+   equalizer while its sample plays, instead of swapping to a generic
+   pause icon -- ties the control's motion back to what it's actually
+   doing (playing sound), and only appears while something is audibly
+   happening. */
+.landing .l-voice-eq {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 12px;
+}
+
+.landing .l-voice-eq span {
+  width: 2px;
+  height: 100%;
+  background: currentColor;
+  border-radius: 1px;
+  animation: l-voice-eq-bounce 0.9s ease-in-out infinite;
+}
+
+.landing .l-voice-eq span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.landing .l-voice-eq span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes l-voice-eq-bounce {
+  0%, 100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .l-voice-eq span {
+    animation: none;
+    transform: scaleY(0.7);
+  }
+}
+
+.landing .l-voice-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.landing .l-voice-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: var(--l-fs-body);
+}
+
+.landing .l-voice-current-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--l-accent);
+}
+
+.landing .l-voice-descriptor {
+  display: block;
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+}
+
+.landing .l-voice-tag {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--l-muted);
+  border: 1px solid var(--l-border);
+  border-radius: 100px;
+  padding: 2px 8px;
+}
+
 /* --- mobile --- */
 
 @media (max-width: 780px) {

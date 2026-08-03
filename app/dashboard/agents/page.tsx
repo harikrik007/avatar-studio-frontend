@@ -6,6 +6,8 @@ import { Room, RoomEvent, Track } from "livekit-client";
 import type { RemoteTrack, RemoteTrackPublication, RemoteParticipant } from "livekit-client";
 import FlowRail from "../FlowRail";
 import { AvatarThumb, DialogPlaceholder, RowChevron, SkeletonRows, Spinner } from "../ui";
+import { VoicePickerDialog } from "@/components/voice-picker-dialog";
+import { voiceById, DEFAULT_VOICE } from "@/lib/voices";
 
 type Avatar = {
   id: string;
@@ -108,6 +110,7 @@ type Agent = {
   avatar_id: string;
   name: string;
   system_prompt: string;
+  voice: string;
   tools_json: ToolConfig[];
   // "provisioning" is server-derived only -- set while a real RunPod pod is
   // booting after Make live was clicked (see backend's _set_agent_live).
@@ -718,6 +721,36 @@ function PendingKnowledgeFiles({
   );
 }
 
+// Always this one compact row, in both the create form and the edit
+// dialog -- the full 24-voice grid only ever appears in its own separate
+// VoicePickerDialog, never inline here, so neither form's height changes
+// whether voice is untouched or being actively browsed.
+function VoiceRowCompact({ voiceId, onChangeClick }: { voiceId: string; onChangeClick: () => void }) {
+  const voice = voiceById(voiceId);
+  return (
+    <div className="l-voice-row-compact">
+      <span className="l-voice-glyph" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 14 14">
+          <path
+            d="M4 5v4M7 2v10M10 5v4"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            fill="none"
+          />
+        </svg>
+      </span>
+      <span className="l-voice-info">
+        <span className="l-voice-name">{voice.id}</span>
+        <span className="l-voice-descriptor">{voice.descriptor}</span>
+      </span>
+      <button type="button" className="l-btn l-btn-ghost" onClick={onChangeClick}>
+        Change voice
+      </button>
+    </div>
+  );
+}
+
 function CreateAgentForm({
   readyAvatars,
   onCancel,
@@ -730,6 +763,8 @@ function CreateAgentForm({
   const [avatarId, setAvatarId] = useState(readyAvatars[0]?.id ?? "");
   const [name, setName] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [voice, setVoice] = useState(DEFAULT_VOICE);
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false);
   const [tools, setTools] = useState<ToolConfig[]>([]);
   const [docFiles, setDocFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -743,7 +778,13 @@ function CreateAgentForm({
     const res = await fetch("/api/agents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ avatar_id: avatarId, name: name.trim(), system_prompt: systemPrompt, tools }),
+      body: JSON.stringify({
+        avatar_id: avatarId,
+        name: name.trim(),
+        system_prompt: systemPrompt,
+        voice,
+        tools,
+      }),
     });
     if (!res.ok) {
       setBusy(false);
@@ -811,6 +852,19 @@ function CreateAgentForm({
           placeholder="You are a friendly front desk assistant for Acme Dental. Help visitors check appointment availability and answer questions about the clinic."
         />
       </div>
+      <div className="l-field">
+        <label>Voice</label>
+        <VoiceRowCompact voiceId={voice} onChangeClick={() => setVoicePickerOpen(true)} />
+      </div>
+      <VoicePickerDialog
+        open={voicePickerOpen}
+        currentVoice={voice}
+        onSelect={(v) => {
+          setVoice(v);
+          setVoicePickerOpen(false);
+        }}
+        onClose={() => setVoicePickerOpen(false)}
+      />
 
       <PendingKnowledgeFiles files={docFiles} onChange={setDocFiles} />
 
@@ -1211,6 +1265,8 @@ function AgentDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [voice, setVoice] = useState(DEFAULT_VOICE);
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false);
   const [tools, setTools] = useState<ToolConfig[]>([]);
   const [busy, setBusy] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -1222,6 +1278,7 @@ function AgentDialog({
     if (agent) {
       setName(agent.name);
       setSystemPrompt(agent.system_prompt);
+      setVoice(agent.voice);
       setTools(agent.tools_json);
       if (!dialog.open) dialog.showModal();
     } else {
@@ -1233,7 +1290,7 @@ function AgentDialog({
 
   const avatar = agent ? avatars.find((a) => a.id === agent.avatar_id) : null;
 
-  async function save(patch: Partial<{ name: string; system_prompt: string; tools: ToolConfig[]; status: string }>) {
+  async function save(patch: Partial<{ name: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
     if (!agent) return;
     setBusy(true);
     if (patch.status) setStatusError(null);
@@ -1313,6 +1370,19 @@ function AgentDialog({
               <label>System prompt</label>
               <textarea rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
             </div>
+            <div className="l-field">
+              <label>Voice</label>
+              <VoiceRowCompact voiceId={voice} onChangeClick={() => setVoicePickerOpen(true)} />
+            </div>
+            <VoicePickerDialog
+              open={voicePickerOpen}
+              currentVoice={voice}
+              onSelect={(v) => {
+                setVoice(v);
+                setVoicePickerOpen(false);
+              }}
+              onClose={() => setVoicePickerOpen(false)}
+            />
 
             <KnowledgeFiles
               agentId={agent.id}
@@ -1327,7 +1397,7 @@ function AgentDialog({
                 type="button"
                 className="l-btn l-btn-primary"
                 disabled={busy}
-                onClick={() => save({ name, system_prompt: systemPrompt, tools })}
+                onClick={() => save({ name, system_prompt: systemPrompt, voice, tools })}
               >
                 {busy ? (
                   <>
