@@ -90,6 +90,13 @@ export function VoicePickerDialog({
   if (!mounted) return null;
 
   return createPortal(
+    // The .l-voice-* rules in landing.css are scoped ".landing .l-voice-*"
+    // (that ancestor class is what the dashboard's whole layout is wrapped
+    // in, app/dashboard/layout.tsx). Portaling to document.body moves this
+    // dialog outside that wrapper, so without re-adding the class here the
+    // dialog rendered with zero styling -- confirmed as a real regression
+    // introduced by the portal fix, not present before it.
+    <div className="landing">
     <dialog ref={dialogRef} className="l-voice-picker" onClose={onClose} onCancel={onClose}>
       <button type="button" className="l-dialog-close" onClick={onClose} aria-label="Close">
         &times;
@@ -171,7 +178,8 @@ export function VoicePickerDialog({
       </div>
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <audio ref={audioRef} onEnded={() => setPlayingId(null)} />
-    </dialog>,
+    </dialog>
+    </div>,
     document.body
   );
 }
