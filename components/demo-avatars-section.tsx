@@ -11,6 +11,7 @@ type DemoAgent = {
   business: string;
   blurb: string;
   idleVideoSrc: string; // each avatar's own idle loop -- LiveKitFace's default is a single generic clip
+  kind: "pizza" | "bank" | "ringme"; // picks which tool-call handler below answers this card's calls
 };
 
 // All three are real, box-hosted deployments (never RunPod) -- seeded into
@@ -24,6 +25,7 @@ const DEMO_AGENTS: DemoAgent[] = [
     business: "Pizza Orbit",
     blurb: "Order pizza, ask about the menu, get delivery help.",
     idleVideoSrc: "/pizza-idle-loop.webm",
+    kind: "pizza",
   },
   {
     key: "pk_955115ca0514429ebd62c6cf2ef9d370",
@@ -31,6 +33,7 @@ const DEMO_AGENTS: DemoAgent[] = [
     business: "central Bank",
     blurb: "Check balances, ask about products, get account help.",
     idleVideoSrc: "/bank-idle-loop.webm",
+    kind: "bank",
   },
   {
     key: "pk_02e0307e97d74dd086602ea4c618bef4",
@@ -38,8 +41,144 @@ const DEMO_AGENTS: DemoAgent[] = [
     business: "RingMe",
     blurb: "Customer care for RingMe's own callers.",
     idleVideoSrc: "/ringme-idle-loop.webm",
+    kind: "ringme",
   },
 ];
+
+// Mirrors central Bank's own demo data + PIN check (bank/lib/ringme-content.ts,
+// bank/components/voice-assistant-demo.tsx's executeToolCall) -- kept as a
+// separate, smaller copy here rather than shared, since this is the one
+// place check_balance/get_account_details/download_statement need to behave
+// for real instead of the "Not available in this demo" stub every other
+// tool call gets. Real bank.agentbaba.ai is untouched by this.
+const BANK_DEMO_PIN = "4321";
+const BANK_ACCOUNTS = [
+  {
+    id: "primary-savings",
+    type: "Savings",
+    nickname: "Primary Savings",
+    holderName: "Arun Kumar",
+    accountNumberMasked: "XXXXXX4821",
+    ifsc: "FDRL0001234",
+    branch: "Kochi MG Road",
+    availableBalance: 128450.75,
+    ledgerBalance: 129100.75,
+  },
+  {
+    id: "family-current",
+    type: "Current",
+    nickname: "Family Current",
+    holderName: "Arun Kumar",
+    accountNumberMasked: "XXXXXX9037",
+    ifsc: "FDRL0005678",
+    branch: "Bengaluru Indiranagar",
+    availableBalance: 86320.2,
+    ledgerBalance: 87320.2,
+  },
+];
+const BANK_STATEMENTS = [
+  { id: "jun-2026", label: "June 2026 Statement", period: "01 Jun 2026 - 30 Jun 2026" },
+  { id: "may-2026", label: "May 2026 Statement", period: "01 May 2026 - 31 May 2026" },
+];
+
+function formatInr(amount: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+function normalizeToken(input: string) {
+  return input.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function resolveBankAccount(args: Record<string, unknown>) {
+  const accountId = normalizeToken(String(args.accountId ?? ""));
+  const accountType = normalizeToken(String(args.accountType ?? ""));
+  return (
+    BANK_ACCOUNTS.find((a) => normalizeToken(a.id) === accountId) ??
+    BANK_ACCOUNTS.find((a) => normalizeToken(a.type) === accountType) ??
+    BANK_ACCOUNTS[0]
+  );
+}
+
+function resolveBankStatement(statementId: unknown) {
+  const id = normalizeToken(String(statementId ?? ""));
+  return BANK_STATEMENTS.find((s) => normalizeToken(s.id) === id) ?? BANK_STATEMENTS[0];
+}
+
+function executeBankToolCall(call: AvatarToolCall): Record<string, unknown> {
+  const args = (call.args ?? {}) as Record<string, unknown>;
+  const account = resolveBankAccount(args);
+
+  if (call.name === "check_balance") {
+    const pin = typeof args.pin === "string" ? args.pin.trim() : "";
+    if (!pin) {
+      return {
+        success: false,
+        requiresPin: true,
+        customerMessage: "Please tell me the demo PIN so I can check your balance.",
+      };
+    }
+    if (pin !== BANK_DEMO_PIN) {
+      return {
+        success: false,
+        requiresPin: true,
+        customerMessage: "That PIN doesn't match our demo account. The demo PIN is 4321.",
+      };
+    }
+    return {
+      success: true,
+      accountId: account.id,
+      availableBalance: account.availableBalance,
+      ledgerBalance: account.ledgerBalance,
+      customerMessage: `${account.nickname} available balance is ${formatInr(account.availableBalance)} and ledger balance is ${formatInr(account.ledgerBalance)}.`,
+    };
+  }
+
+  if (call.name === "get_account_details") {
+    return {
+      success: true,
+      account: {
+        id: account.id,
+        type: account.type,
+        nickname: account.nickname,
+        holderName: account.holderName,
+        accountNumberMasked: account.accountNumberMasked,
+        ifsc: account.ifsc,
+        branch: account.branch,
+      },
+      customerMessage: `${account.nickname} is your ${account.type.toLowerCase()} account ending ${account.accountNumberMasked.slice(-4)}. IFSC is ${account.ifsc} and branch is ${account.branch}.`,
+    };
+  }
+
+  if (call.name === "download_statement") {
+    const statement = resolveBankStatement(args.statementId);
+    return {
+      success: true,
+      statement: { id: statement.id, label: statement.label, period: statement.period },
+      customerMessage: `${statement.label} is ready for ${account.nickname}. Statement downloads aren't available in this demo, but they work on the live site.`,
+    };
+  }
+
+  return { success: false, error: "Not available in this demo." };
+}
+
+function executeRingmeToolCall(call: AvatarToolCall): Record<string, unknown> {
+  if (call.name === "save_contact_details") {
+    const args = (call.args ?? {}) as Record<string, unknown>;
+    const name = typeof args.name === "string" ? args.name.trim() : "";
+    return {
+      success: true,
+      customerMessage: name
+        ? `Thanks ${name}, I've saved your details.`
+        : "Thanks, I've saved your details.",
+    };
+  }
+  return { success: false, error: "Not available in this demo." };
+}
 
 type CardStatus =
   | "idle"
@@ -153,15 +292,25 @@ export function DemoAvatarsSection() {
   }
 
   function handleToolCalls(calls: AvatarToolCall[]) {
-    // No tool-owning UI here (no cart, no account panel) -- answering with
-    // success: false lets the persona explain the limitation in its own
-    // words instead of hanging on a call that never resolves.
+    // Bank's check_balance/get_account_details/download_statement and
+    // RingMe's save_contact_details answer for real (see executeBankToolCall
+    // / executeRingmeToolCall above) since both are just data lookups with
+    // no UI dependency. Pizza's cart tools stay stubbed -- add_to_cart/
+    // view_cart/calculate_cart_total need real cart *state*, which this
+    // page doesn't own; Chef Mozza still answers list_menu questions fine
+    // from her own system-prompt knowledge regardless of the tool result.
     if (!calls.length || !sessionRef.current) return;
+    const kind = DEMO_AGENTS.find((a) => a.key === activeKeyRef.current)?.kind;
     sessionRef.current.sendToolResponse({
       functionResponses: calls.map((call) => ({
         id: call.id,
         name: call.name,
-        response: { success: false, error: "Not available in this demo." },
+        response:
+          kind === "bank"
+            ? executeBankToolCall(call)
+            : kind === "ringme"
+              ? executeRingmeToolCall(call)
+              : { success: false, error: "Not available in this demo." },
       })),
     });
   }
