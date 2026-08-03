@@ -900,7 +900,15 @@ type ActivityEntry =
   // look afterwards.
   | { id: string; kind: "tool"; name: string; status: "calling" | "done" | "failed"; detail?: string };
 
-type TestState = "idle" | "connecting" | "connected" | "error";
+type TestState = "idle" | "connecting" | "warming" | "connected" | "error";
+
+// Bounded polling of GET /test-session/{room} while "warming" -- catches a
+// real RunPod job failure (the worker never booted) instead of leaving the
+// customer staring at "warming up" forever. Not tight: the bot's own
+// LiveKit track subscription is what actually ends the warming state on
+// the happy path, this is only the unhappy-path backstop.
+const WARMING_POLL_MS = 4000;
+const WARMING_MAX_POLLS = 25; // ~100s, just past the "up to 90s" copy below
 
 // Talks to a real LiveKit room -- the same one agent.main just published its
 // avatar video/audio tracks into -- so this is the actual test drive, not a
@@ -1003,7 +1011,15 @@ function LiveTestPanel({
       roomRef.current = room;
 
       room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
-        if (track.kind === Track.Kind.Video && videoRef.current) track.attach(videoRef.current);
+        if (track.kind === Track.Kind.Video && videoRef.current) {
+          track.attach(videoRef.current);
+          // The bot's video track only exists once agent.main has actually
+          // booted and published -- this, not room.connect() resolving, is
+          // the real "live" signal for a RunPod-Serverless-backed session
+          // (unlike the old box-hosted orchestrator, connect() now
+          // resolves against an empty room almost instantly).
+          if (!cancelled) setState("connected");
+        }
         if (track.kind === Track.Kind.Audio && audioRef.current) track.attach(audioRef.current);
       });
 
@@ -1058,7 +1074,12 @@ function LiveTestPanel({
         return;
       }
       if (cancelled) return;
-      setState("connected"); // the avatar is visible even if the mic step below fails
+      // Room joined, but the bot itself may still be booting (RunPod cold
+      // start, ~40-90s) -- "connected" only fires once its video track
+      // actually arrives, above. Mic still enables now, not once
+      // "connected": no reason to make the customer wait to grant mic
+      // permission just because the bot hasn't shown up yet.
+      setState("warming");
 
       try {
         await room.localParticipant.setMicrophoneEnabled(true);
@@ -1079,6 +1100,42 @@ function LiveTestPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
+  // Unhappy-path backstop while "warming": if RunPod's own job status comes
+  // back FAILED, surface that instead of leaving the customer staring at
+  // "warming up" until they give up. The happy path never touches this --
+  // the TrackSubscribed handler above ends "warming" first.
+  useEffect(() => {
+    if (state !== "warming") return;
+    let cancelled = false;
+    let polls = 0;
+
+    const interval = setInterval(async () => {
+      polls += 1;
+      const room = roomNameRef.current;
+      if (!room) return;
+      try {
+        const res = await fetch(`/api/agents/${agentId}/test-session?room=${encodeURIComponent(room)}`);
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (body.runpod_status === "FAILED" || body.runpod_status === "CANCELLED") {
+          setError("The test session's GPU worker failed to start. Try again.");
+          setState("error");
+        }
+      } catch {
+        // A transient status-check failure isn't itself a reason to give
+        // up -- only RunPod's own reported FAILED/CANCELLED is.
+      }
+      if (polls >= WARMING_MAX_POLLS && !cancelled) {
+        setError("Still warming up after a while -- the GPU worker may be slow to start. You can keep waiting or stop and try again.");
+      }
+    }, WARMING_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [state, agentId]);
+
   const handleStopClick = useCallback(() => {
     void teardown().then(onStopped);
   }, [teardown, onStopped]);
@@ -1090,7 +1147,11 @@ function LiveTestPanel({
         <audio ref={audioRef} autoPlay />
         {state !== "connected" ? (
           <div className="l-live-test-overlay">
-            {state === "error" ? error || "Something went wrong." : "Connecting…"}
+            {state === "error"
+              ? error || "Something went wrong."
+              : state === "warming"
+                ? "Warming up your agent — this can take up to 90 seconds…"
+                : "Connecting…"}
           </div>
         ) : null}
       </div>
@@ -1100,7 +1161,11 @@ function LiveTestPanel({
             ? micOn
               ? "Live — mic on, talk to your agent"
               : `Live — ${micError || "mic unavailable"}`
-            : state}
+            : state === "warming"
+              ? error || "Warming up…"
+              : state === "error"
+                ? error || "Error"
+                : "Connecting…"}
         </span>
         <button type="button" className="l-btn l-btn-ghost" onClick={handleStopClick}>
           Stop test
