@@ -37,6 +37,9 @@ type ToolConfig = {
   url: string;
   headers: Record<string, string>;
   body_template?: string | null;
+  // A built-in connector's own credential (e.g. tavily_search's Tavily key)
+  // -- masked as ••••1234 once saved, same convention as header values.
+  api_key: string;
 };
 
 // Headers are stored as an object but edited as text, one "Name: value" per
@@ -110,6 +113,7 @@ type Agent = {
   avatar_id: string;
   name: string;
   system_prompt: string;
+  opening_intro: string;
   voice: string;
   tools_json: ToolConfig[];
   // "provisioning" is server-derived only -- set while a real RunPod pod is
@@ -142,6 +146,7 @@ function newTool(type: ToolType = "http_request"): ToolConfig {
     url: "",
     headers: {},
     body_template: null,
+    api_key: "",
   };
 }
 
@@ -446,10 +451,31 @@ function ToolEditor({ tools, onChange, agentId }: { tools: ToolConfig[]; onChang
             </div>
 
             {!isCustom ? (
-              <p className="l-connector-note">
-                Built-in connector—no setup needed beyond the name and description above. The
-                agent will pass its own search query automatically.
-              </p>
+              <>
+                {tool.type === "tavily_search" ? (
+                  <div className="l-field">
+                    <label>Tavily API key</label>
+                    <input
+                      type="text"
+                      spellCheck={false}
+                      value={tool.api_key}
+                      onChange={(e) => updateTool(tool.id, { api_key: e.target.value })}
+                      placeholder="tvly-..."
+                    />
+                    <p className="l-connector-note">
+                      Searches run against <em>your</em> Tavily account, so usage is billed to
+                      you, not shared platform-wide. Get a key at tavily.com — it&apos;s
+                      encrypted and shown only as &bull;&bull;&bull;&bull;1234 once saved; leave
+                      the dots alone to keep the saved key.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="l-connector-note">
+                    Built-in connector—no setup needed beyond the name and description above. The
+                    agent will pass its own search query automatically.
+                  </p>
+                )}
+              </>
             ) : (
               <>
                 <div className="l-tool-row">
@@ -762,6 +788,7 @@ function CreateAgentForm({
 }) {
   const [avatarId, setAvatarId] = useState(readyAvatars[0]?.id ?? "");
   const [name, setName] = useState("");
+  const [openingIntro, setOpeningIntro] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [voice, setVoice] = useState(DEFAULT_VOICE);
   const [voicePickerOpen, setVoicePickerOpen] = useState(false);
@@ -781,6 +808,7 @@ function CreateAgentForm({
       body: JSON.stringify({
         avatar_id: avatarId,
         name: name.trim(),
+        opening_intro: openingIntro,
         system_prompt: systemPrompt,
         voice,
         tools,
@@ -841,6 +869,20 @@ function CreateAgentForm({
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Front Desk Assistant"
         />
+      </div>
+      <div className="l-field">
+        <label htmlFor="agent-intro">Opening intro</label>
+        <textarea
+          id="agent-intro"
+          rows={2}
+          value={openingIntro}
+          onChange={(e) => setOpeningIntro(e.target.value)}
+          placeholder="Hi, thanks for calling Acme Dental! I'm here to help with appointments and questions — what can I do for you?"
+        />
+        <p className="l-connector-note">
+          Spoken word-for-word the moment a session starts — before anything else. Leave blank
+          for a generic, improvised greeting instead.
+        </p>
       </div>
       <div className="l-field">
         <label htmlFor="agent-prompt">System prompt</label>
@@ -1329,6 +1371,7 @@ function AgentDialog({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState("");
+  const [openingIntro, setOpeningIntro] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [voice, setVoice] = useState(DEFAULT_VOICE);
   const [voicePickerOpen, setVoicePickerOpen] = useState(false);
@@ -1342,6 +1385,7 @@ function AgentDialog({
     if (!dialog) return;
     if (agent) {
       setName(agent.name);
+      setOpeningIntro(agent.opening_intro);
       setSystemPrompt(agent.system_prompt);
       setVoice(agent.voice);
       setTools(agent.tools_json);
@@ -1355,7 +1399,7 @@ function AgentDialog({
 
   const avatar = agent ? avatars.find((a) => a.id === agent.avatar_id) : null;
 
-  async function save(patch: Partial<{ name: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
+  async function save(patch: Partial<{ name: string; opening_intro: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
     if (!agent) return;
     setBusy(true);
     if (patch.status) setStatusError(null);
@@ -1449,6 +1493,19 @@ function AgentDialog({
               <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="l-field">
+              <label>Opening intro</label>
+              <textarea
+                rows={2}
+                value={openingIntro}
+                onChange={(e) => setOpeningIntro(e.target.value)}
+                placeholder="Hi, thanks for calling Acme Dental! I'm here to help with appointments and questions — what can I do for you?"
+              />
+              <p className="l-connector-note">
+                Spoken word-for-word the moment a session starts — before anything else. Leave
+                blank for a generic, improvised greeting instead.
+              </p>
+            </div>
+            <div className="l-field">
               <label>System prompt</label>
               <textarea rows={5} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
             </div>
@@ -1479,7 +1536,7 @@ function AgentDialog({
                 type="button"
                 className="l-btn l-btn-primary"
                 disabled={busy}
-                onClick={() => save({ name, system_prompt: systemPrompt, voice, tools })}
+                onClick={() => save({ name, opening_intro: openingIntro, system_prompt: systemPrompt, voice, tools })}
               >
                 {busy ? (
                   <>
