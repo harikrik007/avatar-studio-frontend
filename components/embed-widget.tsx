@@ -334,6 +334,17 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           : "#6b7280";
 
   const showTranscript = hasRoom && messages.length > 0;
+  // The button is an icon, so what it would have said lives in its tooltip
+  // and its aria-label instead of disappearing.
+  const callTitle = isConnected
+    ? "End call"
+    : status === "connecting"
+      ? "Connecting…"
+      : status === "checking"
+        ? "Checking availability…"
+        : status === "busy"
+          ? "All agents are busy"
+          : "Start call";
   // Without the column, the caption is the only view of the conversation --
   // so it shows the whole last line rather than the newest delta.
   const lastLine = messages.length ? displayText(messages[messages.length - 1].text) : "";
@@ -402,32 +413,60 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             idleVideoSrc={previewVideoUrl ?? undefined}
             idleImageSrc={previewImageUrl ?? null}
           />
-          <button
-            type="button"
-            aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
-            aria-pressed={!micOn}
-            disabled={!isConnected}
-            onClick={toggleMic}
-            style={{
-              ...micButtonStyle,
-              background: !isConnected ? "#9ca3af" : micOn ? "#16a34a" : "#dc2626",
-              // Speaking is the avatar's turn, not the visitor's -- the ring
-              // is the only place that distinction is visible at a glance.
-              boxShadow: isSpeaking ? "0 0 0 6px rgba(22,163,74,0.22)" : "0 4px 12px rgba(0,0,0,0.25)",
-            }}
-          >
-            {micOn ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" />
-                <path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+          <div style={controlsRowStyle}>
+            <button
+              type="button"
+              aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
+              aria-pressed={!micOn}
+              disabled={!isConnected}
+              onClick={toggleMic}
+              style={{
+                ...roundButtonStyle,
+                background: !isConnected ? "rgba(107,114,128,0.85)" : micOn ? "#16a34a" : "#dc2626",
+                cursor: isConnected ? "pointer" : "default",
+                // Speaking is the avatar's turn, not the visitor's -- the
+                // ring is the only place that distinction is visible at a
+                // glance.
+                boxShadow: isSpeaking ? "0 0 0 6px rgba(22,163,74,0.22)" : "0 4px 12px rgba(0,0,0,0.25)",
+              }}
+            >
+              {micOn ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" />
+                  <path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" />
+                  <path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              )}
+            </button>
+
+            {/* Start and end are the same control, the way a phone works:
+                green to call, red to hang up, in one place the visitor is
+                already looking. */}
+            <button
+              type="button"
+              aria-label={isConnected ? "End call" : "Start call"}
+              disabled={busy || status === "busy"}
+              onClick={() => (isConnected ? void endSession("visitor_closed") : void connect())}
+              title={callTitle}
+              style={{
+                ...roundButtonStyle,
+                background: isConnected ? "#dc2626" : busy ? "#d97706" : "#16a34a",
+                opacity: busy || status === "busy" ? 0.75 : 1,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                style={{ transform: isConnected ? "rotate(135deg)" : "none" }}>
+                <path
+                  d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.58 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"
+                  fill="#fff"
+                />
               </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" />
-                <path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            )}
-          </button>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -452,29 +491,16 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
 
       {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
 
-      <button
-        type="button"
-        style={{ ...connectButtonStyle, opacity: busy ? 0.6 : 1 }}
-        disabled={busy || status === "busy"}
-        onClick={() => (isConnected ? void endSession("visitor_closed") : void connect())}
-      >
-        {isConnected
-          ? "END CALL"
-          : status === "connecting"
-            ? "CONNECTING…"
-            : status === "checking"
-              ? "CHECKING…"
-              : status === "busy"
-                ? "ALL AGENTS BUSY"
-                : "CONNECT"}
-      </button>
       </div>
     </div>
   );
 }
 
-const STAGE_W = 300;
-const STAGE_H = 330;
+const STAGE_W = 312;
+// The call button moved onto the video, so the height the CONNECT pill
+// used to occupy goes to the face instead -- which is the thing a visitor
+// is actually looking at.
+const STAGE_H = 420;
 
 const shellStyle: React.CSSProperties = {
   display: "flex",
@@ -613,9 +639,12 @@ const shareButtonStyle: React.CSSProperties = {
 };
 
 const stageWrapStyle: React.CSSProperties = {
-  padding: "14px 14px 8px",
+  flex: 1,
+  padding: "14px 14px 16px",
   display: "flex",
   justifyContent: "center",
+  alignItems: "center",
+  minHeight: 0,
 };
 
 const stageStyle: React.CSSProperties = {
@@ -626,11 +655,17 @@ const stageStyle: React.CSSProperties = {
   lineHeight: 0,
 };
 
-const micButtonStyle: React.CSSProperties = {
+const controlsRowStyle: React.CSSProperties = {
   position: "absolute",
-  left: "50%",
-  bottom: 12,
-  transform: "translateX(-50%)",
+  left: 0,
+  right: 0,
+  bottom: 14,
+  display: "flex",
+  justifyContent: "center",
+  gap: 14,
+};
+
+const roundButtonStyle: React.CSSProperties = {
   width: 46,
   height: 46,
   borderRadius: "50%",
@@ -640,6 +675,7 @@ const micButtonStyle: React.CSSProperties = {
   justifyContent: "center",
   cursor: "pointer",
   transition: "box-shadow 0.15s ease, background 0.15s ease",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
 };
 
 const transcriptStyle: React.CSSProperties = {
@@ -657,19 +693,6 @@ const errorStyle: React.CSSProperties = {
   color: "#b91c1c",
   textAlign: "center",
   margin: "0 14px 6px",
-};
-
-const connectButtonStyle: React.CSSProperties = {
-  margin: "auto 14px 16px",
-  padding: "15px 16px",
-  borderRadius: 999,
-  border: "none",
-  background: "#0b0b0c",
-  color: "#ffffff",
-  fontSize: 14,
-  fontWeight: 800,
-  letterSpacing: "0.06em",
-  cursor: "pointer",
 };
 
 const secondaryButtonStyle: React.CSSProperties = {

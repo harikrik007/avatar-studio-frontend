@@ -74,10 +74,6 @@
     '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
     '<path d="M4 4H20V16H7.5L4 19.5V4Z" stroke="white" stroke-width="1.8" stroke-linejoin="round"/>' +
     "</svg>";
-  var CLOSE_ICON =
-    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M5 5L19 19M19 5L5 19" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>';
-
   var bubble = document.createElement("button");
   bubble.setAttribute("aria-label", "Open chat");
   bubble.type = "button";
@@ -92,18 +88,18 @@
       "border:none;background:" + (round ? accent : "transparent") + ";" +
       (round ? "width:60px;height:60px;border-radius:50%;box-shadow:0 6px 20px rgba(0,0,0,0.25);"
              : "padding:0;border-radius:14px;box-shadow:none;") +
-      "cursor:pointer;z-index:2147483000;display:flex;flex-direction:column;" +
+      "cursor:pointer;z-index:2147483000;flex-direction:column;" +
+      "display:" + (open ? "none" : "flex") + ";" +
       "align-items:center;justify-content:center;gap:6px;transition:transform 0.15s ease;" +
       "font:600 12px/1 system-ui,-apple-system,'Segoe UI',sans-serif;";
   }
 
   function renderBubble() {
-    var showFace = Boolean(avatarUrl) && !open;
+    // Hidden while open -- the panel carries its own close button, and a
+    // second one floating under it was just another way to do the same
+    // thing, sitting in the visitor's way.
+    var showFace = Boolean(avatarUrl);
     bubble.style.cssText = bubbleBaseStyle(!showFace);
-    if (open) {
-      bubble.innerHTML = CLOSE_ICON;
-      return;
-    }
     if (!showFace) {
       bubble.innerHTML = CHAT_ICON;
       return;
@@ -167,7 +163,7 @@
     open = next;
     ensureFrame();
     panelWrap.style.display = open ? "block" : "none";
-    bubble.setAttribute("aria-label", open ? "Close chat" : "Open chat");
+    bubble.setAttribute("aria-label", "Open chat");
     renderBubble();
   }
 
