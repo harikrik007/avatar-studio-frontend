@@ -16,6 +16,12 @@ type LiveKitFaceProps = {
    * loop (e.g. the demo section, one per real avatar) to avoid every card
    * showing the same face before connecting. */
   idleVideoSrc?: string;
+  /** A still of this avatar, used in preference to any clip. Provider-
+   * hosted avatars (Anam) have no idle clip we can serve -- theirs is a
+   * private object that 403s for a visitor -- but they do have a public
+   * still, and showing the right face frozen beats showing the wrong face
+   * moving. */
+  idleImageSrc?: string | null;
 };
 
 /**
@@ -38,7 +44,8 @@ export function LiveKitFace({
   isConnected,
   width = 320,
   height = 320,
-  idleVideoSrc = "/avatar-idle-loop.webm"
+  idleVideoSrc = "/avatar-idle-loop.webm",
+  idleImageSrc = null
 }: LiveKitFaceProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -91,7 +98,15 @@ export function LiveKitFace({
         height={height}
         style={{ width, height, objectFit: "cover", visibility: showLive ? "visible" : "hidden" }}
       />
-      {showLive ? null : (
+      {showLive ? null : idleImageSrc ? (
+        <img
+          src={idleImageSrc}
+          alt=""
+          width={width}
+          height={height}
+          style={{ position: "absolute", inset: 0, width, height, objectFit: "cover" }}
+        />
+      ) : (
         <video
           src={idleVideoSrc}
           autoPlay
