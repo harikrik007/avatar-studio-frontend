@@ -165,7 +165,7 @@ function newTool(type: ToolType = "http_request"): ToolConfig {
 }
 
 /* Runs one tool once against the real executor and shows what came back.
-   Before this, checking a tool meant booting a GPU worker and talking to
+   Before this, checking a tool meant starting a whole session and talking to
    the avatar to find out a URL had a typo in it. */
 function ToolTester({ tool, agentId }: { tool: ToolConfig; agentId?: string }) {
   const [open, setOpen] = useState(false);
@@ -273,11 +273,9 @@ export default function AgentsPage() {
     void refresh();
   }, [refresh]);
 
-  // Poll while a real RunPod pod is booting for a just-made-live agent
-  // (30-90s+) -- same pattern as dashboard/avatars/page.tsx polling while
-  // an avatar is uploading/processing, since this is the same shape of
-  // problem: a slow background operation the dashboard finds out about by
-  // asking again, not by pushing.
+  // Nothing boots for a hosted avatar -- "Make live" is instant, since
+  // there is no pod to rent. Kept because status is still server-derived
+  // and a failure has to surface somewhere.
   useEffect(() => {
     const anyProvisioning = agents.some((a) => a.status === "provisioning");
     if (!anyProvisioning) return;
@@ -1045,11 +1043,11 @@ type TestState = "idle" | "connecting" | "warming" | "connected" | "error";
 // LiveKit track subscription is what actually ends the warming state on
 // the happy path, this is only the unhappy-path backstop.
 const WARMING_POLL_MS = 4000;
-const WARMING_MAX_POLLS = 25; // ~100s, just past the "up to 90s" copy below
+const WARMING_MAX_POLLS = 10; // ~40s; the avatar normally appears in ~2
 
 // Talks to a real LiveKit room -- the same one agent.main just published its
 // avatar video/audio tracks into -- so this is the actual test drive, not a
-// mockup: real Gemini, real tool calls, real GPU-rendered video.
+// mockup: real Gemini, real tool calls, real rendered video.
 function LiveTestPanel({
   agentId,
   onStopped,
@@ -1212,7 +1210,7 @@ function LiveTestPanel({
       }
       if (cancelled) return;
       // Room joined, but the bot itself may still be booting (RunPod cold
-      // start, ~40-90s) -- "connected" only fires once its video track
+      // start) -- "connected" only fires once its video track
       // actually arrives, above. Mic still enables now, not once
       // "connected": no reason to make the customer wait to grant mic
       // permission just because the bot hasn't shown up yet.
@@ -1255,7 +1253,7 @@ function LiveTestPanel({
         const body = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (body.runpod_status === "FAILED" || body.runpod_status === "CANCELLED") {
-          setError("The test session's GPU worker failed to start. Try again.");
+          setError("The test session failed to start. Try again.");
           setState("error");
         }
       } catch {
@@ -1263,7 +1261,7 @@ function LiveTestPanel({
         // up -- only RunPod's own reported FAILED/CANCELLED is.
       }
       if (polls >= WARMING_MAX_POLLS && !cancelled) {
-        setError("Still warming up after a while -- the GPU worker may be slow to start. You can keep waiting or stop and try again.");
+        setError("The avatar hasn't appeared yet. You can keep waiting, or stop and try again.");
       }
     }, WARMING_POLL_MS);
 
@@ -1287,7 +1285,7 @@ function LiveTestPanel({
             {state === "error"
               ? error || "Something went wrong."
               : state === "warming"
-                ? "Warming up your agent — this can take up to 90 seconds…"
+                ? "Starting your agent — the avatar joins in a few seconds…"
                 : "Connecting…"}
           </div>
         ) : null}
@@ -1509,9 +1507,9 @@ function AgentDialog({
       return;
     }
     if (patch.status) {
-      // Real, common failure here: no persistent GPU serving configured
-      // for this avatar yet, or RunPod couldn't provision a pod right now
-      // (capacity/connectivity) -- see backend's _set_agent_live. This
+      // Real, common failure here: the avatar has no serving configured,
+      // or every session slot is already in use -- see the backend's
+      // _set_agent_live and api/anam_sessions.py. This
       // used to fail completely silently (button just stopped spinning).
       // The proxy route forwards FastAPI's raw body, so the message is
       // under `detail`, not `error` (unlike this dashboard's other proxy
@@ -1672,9 +1670,7 @@ function AgentDialog({
             </div>
             {agent.status === "provisioning" ? (
               <p className="l-connector-note" style={{ marginTop: 8 }}>
-                Provisioning a dedicated GPU server for this agent — this usually takes under
-                two minutes. The widget below goes live automatically the moment it's ready;
-                no need to keep this open.
+                Going live — this takes a moment. The widget below is ready as soon as it is.
               </p>
             ) : null}
             {statusError ? (
@@ -1683,9 +1679,8 @@ function AgentDialog({
               </p>
             ) : null}
             <p className="l-connector-note" style={{ marginTop: 8 }}>
-              Test agent talks to a real, temporary live session on our GPU box—your mic
-              will be requested. It's separate from making the agent live for your own
-              platform.
+              Test agent opens a real, temporary live session — your mic will be requested.
+              It&apos;s separate from making the agent live for your own site.
             </p>
             {agent.embed ? (
               <EmbedWidgetPanel agentId={agent.id} embed={agent.embed} status={agent.status} onChanged={onChanged} />
