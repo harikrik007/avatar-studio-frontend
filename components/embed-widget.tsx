@@ -27,12 +27,15 @@ type Props = {
   publicKey: string;
   accentColor: string;
   greetingLabel: string;
+  /** Shown as the panel's title. The agent's own name, so a visitor knows
+   * who they are about to talk to before the face loads. */
+  agentName?: string;
   origin?: string;
   previewVideoUrl?: string | null;
   previewImageUrl?: string | null;
 };
 
-export function EmbedWidget({ publicKey, accentColor, greetingLabel, origin, previewVideoUrl, previewImageUrl }: Props) {
+export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, origin, previewVideoUrl, previewImageUrl }: Props) {
   const [status, setStatus] = useState<Status>("checking");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>(greetingLabel);
@@ -40,6 +43,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, origin, pre
   const [audioTrack, setAudioTrack] = useState<RemoteTrack | null>(null);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [micOn, setMicOn] = useState(true);
+  const [shared, setShared] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const sessionRef = useRef<AvatarSession | null>(null);
   const roomNameRef = useRef<string | null>(null);
@@ -49,6 +55,39 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, origin, pre
   // visitor can't hold several of a small, shared concurrency pool open
   // across multiple tabs of the same widget.
   const ownsSessionRef = useRef(false);
+
+  /** The panel lives in an iframe the host page owns, so anything that
+   * changes the *frame* -- closing it, resizing it -- has to be asked for
+   * rather than done. widget.js listens for these. targetOrigin is "*"
+   * because the host is an unknown customer domain by definition; nothing
+   * secret travels this way, only "close" and "expand". */
+  function askHost(type: "close" | "expand", detail?: Record<string, unknown>) {
+    try {
+      window.parent?.postMessage({ source: "avatar-studio-widget", type, ...detail }, "*");
+    } catch {
+      /* sandboxed without allow-scripts on the parent -- nothing to do */
+    }
+  }
+
+  function toggleMic() {
+    const next = !micOn;
+    setMicOn(next);
+    void sessionRef.current?.room.localParticipant.setMicrophoneEnabled(next);
+  }
+
+  async function share() {
+    // The thing worth sharing is the page the widget is on, which is the
+    // referrer the iframe was given -- the iframe's own URL is an
+    // implementation detail nobody wants to paste.
+    const url = origin || document.referrer || window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShared(true);
+      setTimeout(() => setShared(false), 1800);
+    } catch {
+      /* clipboard blocked; the button simply does not confirm */
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -215,23 +254,101 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, origin, pre
   }
 
   const isConnected = status === "listening";
+  const busy = status === "connecting" || status === "checking";
+  const statusLabel =
+    status === "listening" ? "LIVE"
+      : status === "connecting" ? "CONNECTING"
+        : status === "checking" ? "CHECKING"
+          : status === "busy" ? "BUSY"
+            : status === "error" ? "ERROR"
+              : status === "ended" ? "ENDED"
+                : "READY";
+  const statusColor =
+    status === "listening" ? "#16a34a"
+      : status === "error" || status === "busy" ? "#b91c1c"
+        : busy ? "#d97706"
+          : "#6b7280";
 
   return (
     <div style={panelStyle}>
-      <div style={{ ...avatarStageStyle, borderColor: accentColor }}>
-        <LiveKitFace
-          videoTrack={videoTrack}
-          audioTrack={audioTrack}
-          isConnected={isConnected}
-          width={220}
-          height={260}
-          idleVideoSrc={previewVideoUrl ?? undefined}
-          idleImageSrc={previewImageUrl ?? null}
-        />
-        {isSpeaking ? <span style={{ ...speakingDotStyle, background: accentColor }} /> : null}
+      <header style={headerStyle}>
+        <span style={{ ...brandStyle, color: accentColor }}>{agentName || "Avatar"}</span>
+        <span style={windowControlsStyle}>
+          <button type="button" aria-label="Minimise" style={iconButtonStyle}
+            onClick={() => askHost("close")}>
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+              <path d="M3 7h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button type="button" aria-label={expanded ? "Shrink" : "Expand"} style={iconButtonStyle}
+            onClick={() => { const next = !expanded; setExpanded(next); askHost("expand", { expanded: next }); }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M2 5V2h3M12 9v3H9M12 5V2H9M2 9v3h3" stroke="currentColor"
+                strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button type="button" aria-label="Close" style={{ ...iconButtonStyle, color: "#dc2626" }}
+            onClick={() => { void endSession("visitor_closed"); askHost("close"); }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+              <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+        </span>
+      </header>
+
+      <div style={statusRowStyle}>
+        <span style={statusLeftStyle}>
+          <span style={{ ...statusDotStyle, background: statusColor }} />
+          {statusLabel}
+        </span>
+        <button type="button" style={shareButtonStyle} onClick={() => void share()}>
+          {shared ? "COPIED" : "SHARE"}
+        </button>
       </div>
 
-      <p style={transcriptStyle}>{transcript}</p>
+      <div style={stageWrapStyle}>
+        <div style={stageStyle}>
+          <LiveKitFace
+            videoTrack={videoTrack}
+            audioTrack={audioTrack}
+            isConnected={isConnected}
+            width={STAGE_W}
+            height={STAGE_H}
+            idleVideoSrc={previewVideoUrl ?? undefined}
+            idleImageSrc={previewImageUrl ?? null}
+          />
+          <button
+            type="button"
+            aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
+            aria-pressed={!micOn}
+            disabled={!isConnected}
+            onClick={toggleMic}
+            style={{
+              ...micButtonStyle,
+              background: !isConnected ? "#9ca3af" : micOn ? "#16a34a" : "#dc2626",
+              // Speaking is the avatar's turn, not the visitor's -- the ring
+              // is the only place that distinction is visible at a glance.
+              boxShadow: isSpeaking ? "0 0 0 6px rgba(22,163,74,0.22)" : "0 4px 12px rgba(0,0,0,0.25)",
+            }}
+          >
+            {micOn ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" />
+                <path d="M5 11a7 7 0 0 0 14 0M12 18v3" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" />
+                <path d="M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Kept deliberately, though the reference has no caption: without it
+          a visitor who cannot hear has no way to follow the conversation. */}
+      {isConnected && transcript ? <p style={transcriptStyle}>{transcript}</p> : null}
 
       {audioBlocked ? (
         <button
@@ -247,97 +364,171 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, origin, pre
 
       {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
 
-      <div style={actionsRowStyle}>
-        {isConnected ? (
-          <button type="button" style={{ ...primaryButtonStyle, background: accentColor }}
-            onClick={() => void endSession("visitor_closed")}>
-            End conversation
-          </button>
-        ) : (
-          <button
-            type="button"
-            style={{
-              ...primaryButtonStyle,
-              background: accentColor,
-              opacity: status === "connecting" || status === "checking" ? 0.6 : 1,
-            }}
-            disabled={status === "connecting" || status === "checking" || status === "busy"}
-            onClick={() => void connect()}
-          >
-            {status === "connecting"
-              ? "Connecting…"
-              : status === "checking"
-                ? "Checking availability…"
-                : status === "busy"
-                  ? "All agents busy"
-                  : "Start talking"}
-          </button>
-        )}
-      </div>
+      <button
+        type="button"
+        style={{ ...connectButtonStyle, opacity: busy ? 0.6 : 1 }}
+        disabled={busy || status === "busy"}
+        onClick={() => (isConnected ? void endSession("visitor_closed") : void connect())}
+      >
+        {isConnected
+          ? "END CALL"
+          : status === "connecting"
+            ? "CONNECTING…"
+            : status === "checking"
+              ? "CHECKING…"
+              : status === "busy"
+                ? "ALL AGENTS BUSY"
+                : "CONNECT"}
+      </button>
     </div>
   );
 }
 
+const STAGE_W = 300;
+const STAGE_H = 330;
+
 const panelStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  alignItems: "center",
-  gap: 12,
-  padding: 16,
   height: "100vh",
   boxSizing: "border-box",
-  fontFamily: "system-ui, -apple-system, sans-serif",
+  fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
   background: "#ffffff",
 };
 
-const avatarStageStyle: React.CSSProperties = {
-  position: "relative",
-  borderRadius: 16,
-  border: "2px solid",
-  overflow: "hidden",
-  width: 220,
-  height: 260,
-  background: "#0b0f14",
+const headerStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "12px 14px",
 };
 
-const speakingDotStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 10,
-  right: 10,
-  width: 10,
-  height: 10,
+const brandStyle: React.CSSProperties = {
+  fontSize: 15,
+  fontWeight: 800,
+  letterSpacing: "0.04em",
+  textTransform: "uppercase",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const windowControlsStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  flexShrink: 0,
+};
+
+const iconButtonStyle: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "none",
+  background: "transparent",
+  color: "#374151",
+  borderRadius: 6,
+  cursor: "pointer",
+  padding: 0,
+};
+
+const statusRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "8px 14px",
+  borderTop: "1px solid #eceef0",
+  borderBottom: "1px solid #eceef0",
+};
+
+const statusLeftStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  color: "#111827",
+};
+
+const statusDotStyle: React.CSSProperties = {
+  width: 8,
+  height: 8,
   borderRadius: "50%",
+  display: "inline-block",
+};
+
+const shareButtonStyle: React.CSSProperties = {
+  border: "1px solid #e2e5e8",
+  background: "#fff",
+  borderRadius: 8,
+  padding: "6px 14px",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  color: "#111827",
+  cursor: "pointer",
+};
+
+const stageWrapStyle: React.CSSProperties = {
+  padding: "14px 14px 8px",
+  display: "flex",
+  justifyContent: "center",
+};
+
+const stageStyle: React.CSSProperties = {
+  position: "relative",
+  borderRadius: 14,
+  overflow: "hidden",
+  background: "#e8ece7",
+  lineHeight: 0,
+};
+
+const micButtonStyle: React.CSSProperties = {
+  position: "absolute",
+  left: "50%",
+  bottom: 12,
+  transform: "translateX(-50%)",
+  width: 46,
+  height: 46,
+  borderRadius: "50%",
+  border: "none",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  transition: "box-shadow 0.15s ease, background 0.15s ease",
 };
 
 const transcriptStyle: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 12,
   lineHeight: 1.4,
-  color: "#1f2937",
+  color: "#4b5563",
   textAlign: "center",
-  minHeight: 36,
-  margin: 0,
+  margin: "0 14px 4px",
+  maxHeight: 34,
+  overflow: "hidden",
 };
 
 const errorStyle: React.CSSProperties = {
   fontSize: 12,
   color: "#b91c1c",
   textAlign: "center",
-  margin: 0,
+  margin: "0 14px 6px",
 };
 
-const actionsRowStyle: React.CSSProperties = {
-  marginTop: "auto",
-  width: "100%",
-};
-
-const primaryButtonStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 16px",
+const connectButtonStyle: React.CSSProperties = {
+  margin: "auto 14px 16px",
+  padding: "15px 16px",
   borderRadius: 999,
   border: "none",
+  background: "#0b0b0c",
   color: "#ffffff",
   fontSize: 14,
-  fontWeight: 600,
+  fontWeight: 800,
+  letterSpacing: "0.06em",
   cursor: "pointer",
 };
 

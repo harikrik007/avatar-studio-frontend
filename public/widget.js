@@ -126,6 +126,13 @@
   var frame = null;
   var panelWrap = null;
   var open = false;
+  var expanded = false;
+  // The panel is a portrait card: a head-and-shoulders avatar plus one
+  // action. Expanded is the same card with room to actually see the face.
+  var PANEL_W = 340;
+  var PANEL_H = 560;
+  var PANEL_W_BIG = 420;
+  var PANEL_H_BIG = 680;
 
   function ensureFrame() {
     if (frame) return;
@@ -134,9 +141,11 @@
     panelWrap.style.cssText =
       "position:fixed;" + edgeStyle +
       (isTop ? "top:" : "bottom:") + panelOffset() + "px;" +
-      "width:300px;height:420px;max-width:calc(100vw - 40px);max-height:calc(100vh - 120px);" +
-      "border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.28);" +
-      "z-index:2147483000;display:none;background:#ffffff;";
+      "width:" + PANEL_W + "px;height:" + PANEL_H + "px;" +
+      "max-width:calc(100vw - 40px);max-height:calc(100vh - " + (panelOffset() + 24) + "px);" +
+      "border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,0.3);" +
+      "border:1px solid rgba(0,0,0,0.08);" +
+      "z-index:2147483000;display:none;background:#ffffff;transition:width 0.18s ease,height 0.18s ease;";
 
     frame = document.createElement("iframe");
     frame.src = studioOrigin + "/embed/" + encodeURIComponent(publicKey);
@@ -164,6 +173,24 @@
 
   bubble.addEventListener("click", function () {
     setOpen(!open);
+  });
+
+  // The panel lives in our iframe but is sized and shown by this script, so
+  // the frame asks rather than acts. Only messages from that exact frame,
+  // from the studio's own origin, are honoured -- any page can postMessage
+  // to any window, so the source check is what makes this safe.
+  window.addEventListener("message", function (event) {
+    if (!frame || event.source !== frame.contentWindow) return;
+    if (event.origin !== studioOrigin) return;
+    var data = event.data;
+    if (!data || data.source !== "avatar-studio-widget") return;
+    if (data.type === "close") {
+      setOpen(false);
+    } else if (data.type === "expand") {
+      expanded = Boolean(data.expanded);
+      panelWrap.style.width = (expanded ? PANEL_W_BIG : PANEL_W) + "px";
+      panelWrap.style.height = (expanded ? PANEL_H_BIG : PANEL_H) + "px";
+    }
   });
 
   function loadAvatar() {

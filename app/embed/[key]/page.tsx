@@ -12,6 +12,7 @@ type EmbedConfig = {
   allowed_origins: string[];
   preview_video_url: string | null;
   preview_image_url: string | null;
+  agent_name: string | null;
 };
 
 /**
@@ -70,6 +71,7 @@ export default async function EmbedPage({ params }: { params: Promise<{ key: str
       origin={origin}
       previewVideoUrl={config.preview_video_url}
       previewImageUrl={config.preview_image_url}
+      agentName={config.agent_name ?? undefined}
     />
   );
 }
