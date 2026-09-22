@@ -39,6 +39,10 @@
 
   var position = currentScript.getAttribute("data-position") || "bottom-right";
   var accent = currentScript.getAttribute("data-accent") || "#0f8f7b";
+  // What the bubble says under the face. A visitor is being invited to
+  // talk to a person-shaped thing, so the default reads like an invitation
+  // rather than a feature name.
+  var label = currentScript.getAttribute("data-label") || "Let's talk";
 
   // The studio's own origin, derived from where this very script was
   // fetched from -- never hardcoded, so the same file works on staging,
@@ -51,27 +55,73 @@
     return;
   }
 
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+
   var isRight = position.indexOf("right") !== -1;
   var isTop = position.indexOf("top") !== -1;
   var edgeStyle = isRight ? "right:20px;" : "left:20px;";
   var vEdgeStyle = isTop ? "top:20px;" : "bottom:20px;";
-  var panelVEdge = isTop ? "top:88px;" : "bottom:88px;";
+  // The avatar's own still, fetched below. Until it arrives (or if it never
+  // does) the bubble is the plain icon it has always been -- the widget has
+  // to be usable on a slow network and on a key with no avatar preview.
+  var avatarUrl = null;
+
+  var CHAT_ICON =
+    '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M4 4H20V16H7.5L4 19.5V4Z" stroke="white" stroke-width="1.8" stroke-linejoin="round"/>' +
+    "</svg>";
+  var CLOSE_ICON =
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M5 5L19 19M19 5L5 19" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>';
 
   var bubble = document.createElement("button");
   bubble.setAttribute("aria-label", "Open chat");
   bubble.type = "button";
-  bubble.style.cssText =
-    "position:fixed;" + edgeStyle + vEdgeStyle +
-    "width:60px;height:60px;border-radius:50%;border:none;" +
-    "background:" + accent + ";box-shadow:0 6px 20px rgba(0,0,0,0.25);" +
-    "cursor:pointer;z-index:2147483000;display:flex;align-items:center;justify-content:center;" +
-    "transition:transform 0.15s ease;";
   bubble.onmouseenter = function () { bubble.style.transform = "scale(1.06)"; };
   bubble.onmouseleave = function () { bubble.style.transform = "scale(1)"; };
-  bubble.innerHTML =
-    '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-    '<path d="M4 4H20V16H7.5L4 19.5V4Z" stroke="white" stroke-width="1.8" stroke-linejoin="round"/>' +
-    "</svg>";
+
+  function bubbleBaseStyle(round) {
+    // Two shapes share one button: a coloured circle holding an icon, and
+    // a face with a caption under it. The second is taller, which is why
+    // the panel's offset is computed rather than fixed.
+    return "position:fixed;" + edgeStyle + vEdgeStyle +
+      "border:none;background:" + (round ? accent : "transparent") + ";" +
+      (round ? "width:60px;height:60px;border-radius:50%;box-shadow:0 6px 20px rgba(0,0,0,0.25);"
+             : "padding:0;border-radius:14px;box-shadow:none;") +
+      "cursor:pointer;z-index:2147483000;display:flex;flex-direction:column;" +
+      "align-items:center;justify-content:center;gap:6px;transition:transform 0.15s ease;" +
+      "font:600 12px/1 system-ui,-apple-system,'Segoe UI',sans-serif;";
+  }
+
+  function renderBubble() {
+    var showFace = Boolean(avatarUrl) && !open;
+    bubble.style.cssText = bubbleBaseStyle(!showFace);
+    if (open) {
+      bubble.innerHTML = CLOSE_ICON;
+      return;
+    }
+    if (!showFace) {
+      bubble.innerHTML = CHAT_ICON;
+      return;
+    }
+    bubble.innerHTML =
+      '<img src="' + escapeHtml(avatarUrl) + '" alt="" ' +
+      'style="width:64px;height:64px;border-radius:50%;object-fit:cover;display:block;' +
+      'border:3px solid #fff;box-shadow:0 6px 20px rgba(0,0,0,0.25);background:#fff;">' +
+      '<span style="background:#fff;color:#111;border-radius:999px;padding:5px 12px;' +
+      'box-shadow:0 4px 14px rgba(0,0,0,0.18);white-space:nowrap;">' +
+      escapeHtml(label) + "</span>";
+  }
+
+  // 60px circle vs. 64px face + gap + caption: the panel has to clear
+  // whichever is mounted, or it sits on top of the bubble.
+  function panelOffset() {
+    return avatarUrl ? 124 : 88;
+  }
 
   var frame = null;
   var panelWrap = null;
@@ -82,7 +132,8 @@
 
     panelWrap = document.createElement("div");
     panelWrap.style.cssText =
-      "position:fixed;" + edgeStyle + panelVEdge +
+      "position:fixed;" + edgeStyle +
+      (isTop ? "top:" : "bottom:") + panelOffset() + "px;" +
       "width:300px;height:420px;max-width:calc(100vw - 40px);max-height:calc(100vh - 120px);" +
       "border-radius:16px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,0.28);" +
       "z-index:2147483000;display:none;background:#ffffff;";
@@ -108,19 +159,42 @@
     ensureFrame();
     panelWrap.style.display = open ? "block" : "none";
     bubble.setAttribute("aria-label", open ? "Close chat" : "Open chat");
-    bubble.innerHTML = open
-      ? '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-        '<path d="M5 5L19 19M19 5L5 19" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>'
-      : '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-        '<path d="M4 4H20V16H7.5L4 19.5V4Z" stroke="white" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+    renderBubble();
   }
 
   bubble.addEventListener("click", function () {
     setOpen(!open);
   });
 
+  function loadAvatar() {
+    // Never blocks the bubble: it is already on the page by now, and a
+    // failure here just leaves the icon in place.
+    if (!window.fetch) return;
+    window
+      .fetch(studioOrigin + "/api/embed/config/" + encodeURIComponent(publicKey))
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (config) {
+        if (!config || !config.preview_image_url) return;
+        var img = new Image();
+        // Only swap the icon once the face has actually loaded, so a
+        // broken or slow image never leaves an empty hole where the
+        // bubble was.
+        img.onload = function () {
+          avatarUrl = config.preview_image_url;
+          renderBubble();
+          if (panelWrap) {
+            panelWrap.style[isTop ? "top" : "bottom"] = panelOffset() + "px";
+          }
+        };
+        img.src = config.preview_image_url;
+      })
+      .catch(function () { /* icon stays; nothing to tell the visitor */ });
+  }
+
   function mount() {
+    renderBubble();
     document.body.appendChild(bubble);
+    loadAvatar();
   }
 
   if (document.body) {
