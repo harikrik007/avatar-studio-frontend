@@ -186,6 +186,12 @@
     if (!data || data.source !== "avatar-studio-widget") return;
     if (data.type === "close") {
       setOpen(false);
+    } else if (data.type === "resize") {
+      // The panel asks for width when its transcript column appears. The
+      // host page's viewport is the authority, not the request: a phone
+      // keeps the card and the panel simply never gets its second column.
+      var want = Math.max(260, Math.min(Number(data.width) || PANEL_W, window.innerWidth - 40));
+      panelWrap.style.width = want + "px";
     } else if (data.type === "expand") {
       expanded = Boolean(data.expanded);
       panelWrap.style.width = (expanded ? PANEL_W_BIG : PANEL_W) + "px";

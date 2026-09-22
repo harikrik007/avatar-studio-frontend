@@ -35,6 +35,20 @@ type Props = {
   previewImageUrl?: string | null;
 };
 
+type Message = { id: number; role: "assistant" | "user"; text: string; at: number };
+
+// Gemini sends transcripts as deltas -- "Hi," then " I'm" then " Riya" --
+// so a chunk is not an utterance. Consecutive chunks from the same speaker
+// this close together are the same sentence still being said, and joining
+// them is the difference between a conversation and a wall of fragments.
+const CHUNK_MERGE_MS = 2500;
+// The panel widens to hold the transcript, and only if the host page has
+// room for it -- a phone gets the card alone rather than two cramped
+// columns.
+const CARD_W = 340;
+const TRANSCRIPT_W = 280;
+const MIN_WIDE_PX = 560;
+
 export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, origin, previewVideoUrl, previewImageUrl }: Props) {
   const [status, setStatus] = useState<Status>("checking");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -46,6 +60,10 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   const [micOn, setMicOn] = useState(true);
   const [shared, setShared] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [hasRoom, setHasRoom] = useState(false);
+  const messageSeqRef = useRef(0);
+  const logRef = useRef<HTMLDivElement | null>(null);
 
   const sessionRef = useRef<AvatarSession | null>(null);
   const roomNameRef = useRef<string | null>(null);
@@ -61,7 +79,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
    * rather than done. widget.js listens for these. targetOrigin is "*"
    * because the host is an unknown customer domain by definition; nothing
    * secret travels this way, only "close" and "expand". */
-  function askHost(type: "close" | "expand", detail?: Record<string, unknown>) {
+  function askHost(type: "close" | "expand" | "resize", detail?: Record<string, unknown>) {
     try {
       window.parent?.postMessage({ source: "avatar-studio-widget", type, ...detail }, "*");
     } catch {
@@ -87,6 +105,41 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     } catch {
       /* clipboard blocked; the button simply does not confirm */
     }
+  }
+
+  // Whether there is room for two columns is a fact about the iframe we
+  // were actually given, not about what we asked for: the host clamps our
+  // width to its own viewport, so this reads the result.
+  useEffect(() => {
+    const measure = () => setHasRoom(window.innerWidth >= MIN_WIDE_PX);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+
+  // Newest line at the bottom, always in view.
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  function appendTranscript(role: "assistant" | "user", text: string) {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      const now = Date.now();
+      if (last && last.role === role && now - last.at < CHUNK_MERGE_MS) {
+        const merged = [...prev];
+        // Gemini's deltas carry their own leading spaces; adding another
+        // would double them mid-sentence.
+        const joiner = /[\s]$/.test(last.text) || /^[\s,.!?']/.test(text) ? "" : " ";
+        merged[merged.length - 1] = { ...last, text: last.text + joiner + trimmed, at: now };
+        return merged;
+      }
+      messageSeqRef.current += 1;
+      return [...prev, { id: messageSeqRef.current, role, text: trimmed, at: now }];
+    });
   }
 
   useEffect(() => {
@@ -166,6 +219,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       }
     }
 
+    askHost("resize", { width: CARD_W });
     setStatus(reason === "idle_timeout" ? "ended" : "idle");
     setTranscript(
       reason === "idle_timeout"
@@ -216,6 +270,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             armIdleTimer();
             const trimmed = text.trim();
             if (trimmed) setTranscript(trimmed);
+            appendTranscript(role, text);
           },
           onSpeakingChange: (speaking) => {
             armIdleTimer();
@@ -237,6 +292,8 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         { sessionUrl: "/api/embed/session", sessionBody: { public_key: publicKey, origin } }
       );
 
+      setMessages([]);
+      askHost("resize", { width: CARD_W + TRANSCRIPT_W });
       sessionRef.current = session;
       roomNameRef.current = session.room.name;
       ownsSessionRef.current = true;
@@ -269,8 +326,26 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         : busy ? "#d97706"
           : "#6b7280";
 
+  const showTranscript = hasRoom && messages.length > 0;
+
   return (
-    <div style={panelStyle}>
+    <div style={shellStyle}>
+      {showTranscript ? (
+        <aside style={transcriptPanelStyle} aria-label="Conversation transcript">
+          <div ref={logRef} style={transcriptLogStyle}>
+            {messages.map((m) => (
+              <p
+                key={m.id}
+                style={m.role === "assistant" ? agentLineStyle : visitorLineStyle}
+              >
+                {m.text}
+              </p>
+            ))}
+          </div>
+        </aside>
+      ) : null}
+
+      <div style={panelStyle}>
       <header style={headerStyle}>
         <span style={{ ...brandStyle, color: accentColor }}>{agentName || "Avatar"}</span>
         <span style={windowControlsStyle}>
@@ -346,9 +421,12 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         </div>
       </div>
 
-      {/* Kept deliberately, though the reference has no caption: without it
-          a visitor who cannot hear has no way to follow the conversation. */}
-      {isConnected && transcript ? <p style={transcriptStyle}>{transcript}</p> : null}
+      {/* The last line, for when there is no room for the column beside the
+          card (a phone). Without either, a visitor who cannot hear has no
+          way to follow the conversation at all. */}
+      {isConnected && transcript && !showTranscript ? (
+        <p style={transcriptStyle}>{transcript}</p>
+      ) : null}
 
       {audioBlocked ? (
         <button
@@ -380,6 +458,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                 ? "ALL AGENTS BUSY"
                 : "CONNECT"}
       </button>
+      </div>
     </div>
   );
 }
@@ -387,9 +466,60 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
 const STAGE_W = 300;
 const STAGE_H = 330;
 
+const shellStyle: React.CSSProperties = {
+  display: "flex",
+  height: "100vh",
+  background: "#ffffff",
+};
+
+const transcriptPanelStyle: React.CSSProperties = {
+  width: TRANSCRIPT_W,
+  flexShrink: 0,
+  borderRight: "1px solid #eceef0",
+  background: "#fafbfc",
+  display: "flex",
+  flexDirection: "column",
+  minWidth: 0,
+};
+
+const transcriptLogStyle: React.CSSProperties = {
+  flex: 1,
+  overflowY: "auto",
+  padding: "16px 14px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  // Older lines fade out at the top instead of being cut by a hard edge,
+  // so the column reads as a conversation running off rather than a box
+  // with something hidden in it.
+  maskImage: "linear-gradient(to bottom, transparent 0, #000 42px)",
+  WebkitMaskImage: "linear-gradient(to bottom, transparent 0, #000 42px)",
+};
+
+const agentLineStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 13,
+  lineHeight: 1.45,
+  color: "#111827",
+  maxWidth: "94%",
+  alignSelf: "flex-start",
+};
+
+const visitorLineStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 13,
+  lineHeight: 1.45,
+  color: "#8b95a1",
+  maxWidth: "88%",
+  alignSelf: "flex-end",
+  textAlign: "right",
+};
+
 const panelStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
+  flex: 1,
+  minWidth: 0,
   height: "100vh",
   boxSizing: "border-box",
   fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
