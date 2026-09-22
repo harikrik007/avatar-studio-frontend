@@ -124,22 +124,29 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   }, [messages]);
 
   function appendTranscript(role: "assistant" | "user", text: string) {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!text) return;
     setMessages((prev) => {
       const last = prev[prev.length - 1];
       const now = Date.now();
+      // Concatenated verbatim, never trimmed: the word breaks live in the
+      // deltas themselves (" I'm", " Riya"), so stripping a chunk's leading
+      // space is what ran the sentence together. Tidying happens once, at
+      // render, where a stray double space is all that is left to fix.
       if (last && last.role === role && now - last.at < CHUNK_MERGE_MS) {
         const merged = [...prev];
-        // Gemini's deltas carry their own leading spaces; adding another
-        // would double them mid-sentence.
-        const joiner = /[\s]$/.test(last.text) || /^[\s,.!?']/.test(text) ? "" : " ";
-        merged[merged.length - 1] = { ...last, text: last.text + joiner + trimmed, at: now };
+        merged[merged.length - 1] = { ...last, text: last.text + text, at: now };
         return merged;
       }
+      // A whitespace-only chunk is the gap between two utterances, not the
+      // start of a third one.
+      if (!text.trim()) return prev;
       messageSeqRef.current += 1;
-      return [...prev, { id: messageSeqRef.current, role, text: trimmed, at: now }];
+      return [...prev, { id: messageSeqRef.current, role, text, at: now }];
     });
+  }
+
+  function displayText(text: string) {
+    return text.replace(/\s+/g, " ").trim();
   }
 
   useEffect(() => {
@@ -327,6 +334,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           : "#6b7280";
 
   const showTranscript = hasRoom && messages.length > 0;
+  // Without the column, the caption is the only view of the conversation --
+  // so it shows the whole last line rather than the newest delta.
+  const lastLine = messages.length ? displayText(messages[messages.length - 1].text) : "";
 
   return (
     <div style={shellStyle}>
@@ -338,7 +348,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                 key={m.id}
                 style={m.role === "assistant" ? agentLineStyle : visitorLineStyle}
               >
-                {m.text}
+                {displayText(m.text)}
               </p>
             ))}
           </div>
@@ -424,8 +434,8 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       {/* The last line, for when there is no room for the column beside the
           card (a phone). Without either, a visitor who cannot hear has no
           way to follow the conversation at all. */}
-      {isConnected && transcript && !showTranscript ? (
-        <p style={transcriptStyle}>{transcript}</p>
+      {isConnected && !showTranscript && (lastLine || transcript) ? (
+        <p style={transcriptStyle}>{lastLine || transcript}</p>
       ) : null}
 
       {audioBlocked ? (
