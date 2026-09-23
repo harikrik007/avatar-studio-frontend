@@ -1464,6 +1464,7 @@ function AgentDialog({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState("");
+  const [avatarId, setAvatarId] = useState("");
   const [openingIntro, setOpeningIntro] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [voice, setVoice] = useState(DEFAULT_VOICE);
@@ -1478,6 +1479,7 @@ function AgentDialog({
     if (!dialog) return;
     if (agent) {
       setName(agent.name);
+      setAvatarId(agent.avatar_id);
       setOpeningIntro(agent.opening_intro);
       setSystemPrompt(agent.system_prompt);
       setVoice(agent.voice);
@@ -1490,9 +1492,10 @@ function AgentDialog({
     }
   }, [agent]);
 
-  const avatar = agent ? avatars.find((a) => a.id === agent.avatar_id) : null;
+  const avatar = agent ? avatars.find((a) => a.id === (avatarId || agent.avatar_id)) : null;
+  const pickable = avatars.filter((a) => a.provider === "anam" && a.status === "ready");
 
-  async function save(patch: Partial<{ name: string; opening_intro: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
+  async function save(patch: Partial<{ avatar_id: string; name: string; opening_intro: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
     if (!agent) return;
     setBusy(true);
     if (patch.status) setStatusError(null);
@@ -1581,7 +1584,16 @@ function AgentDialog({
                 {agentStatusLabel(agent.status)}
               </span>
             </div>
-            <div className="l-avatar-meta">Built from {avatar ? avatar.name : "an avatar"}</div>
+            <div className="l-field" style={{ marginTop: 14 }}>
+              <label>Avatar</label>
+              <AvatarPicker avatars={pickable} selectedId={avatarId} onSelect={setAvatarId} />
+              {agent.status === "live" && avatarId !== agent.avatar_id ? (
+                <p className="l-connector-note">
+                  This agent is live. Saving swaps the face for new conversations — anyone
+                  already talking to it keeps the one they started with.
+                </p>
+              ) : null}
+            </div>
 
             <div className="l-field" style={{ marginTop: 18 }}>
               <label>Agent name</label>
@@ -1631,7 +1643,7 @@ function AgentDialog({
                 type="button"
                 className="l-btn l-btn-primary"
                 disabled={busy}
-                onClick={() => save({ name, opening_intro: openingIntro, system_prompt: systemPrompt, voice, tools })}
+                onClick={() => save({ avatar_id: avatarId, name, opening_intro: openingIntro, system_prompt: systemPrompt, voice, tools })}
               >
                 {busy ? (
                   <>
