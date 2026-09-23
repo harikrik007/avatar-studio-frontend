@@ -114,8 +114,12 @@
   }
 
   // 60px circle vs. 64px face + gap + caption: the panel has to clear
-  // whichever is mounted, or it sits on top of the bubble.
+  // whichever is mounted, or it sits on top of the bubble. Only matters
+  // for the panel widget -- the frameless one hides the bubble the moment
+  // it opens, so it has nothing to clear and sits at the same small
+  // margin the bubble itself uses.
   function panelOffset() {
+    if (frameless) return 20;
     return avatarUrl ? 124 : 88;
   }
 
@@ -233,6 +237,7 @@
             panelWrap.style.overflow = "visible";
             panelWrap.style.width = FRAMELESS_W + "px";
             panelWrap.style.height = FRAMELESS_H + "px";
+            panelWrap.style[isTop ? "top" : "bottom"] = panelOffset() + "px";
             if (frame) frame.style.background = "transparent";
           }
         }

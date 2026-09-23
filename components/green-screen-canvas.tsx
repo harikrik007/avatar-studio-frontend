@@ -24,6 +24,12 @@ import { Track, type RemoteTrack } from "livekit-client";
 
 type Props = {
   videoTrack: RemoteTrack | null;
+  /** Not drawn -- the canvas never touches it -- but attached to a
+   * document-level <audio> element the same way LiveKitFace does it, so
+   * the avatar's voice plays regardless of which one is rendering her
+   * face. Without this the frameless path was silent: it drew the video
+   * track and never went near the audio one. */
+  audioTrack?: RemoteTrack | null;
   /** Shown, keyed the same way, before a track exists. The avatar's own
    * green-screen still, so the idle state floats exactly like the live one
    * rather than turning back into a rectangle. */
@@ -108,10 +114,30 @@ function compile(gl: WebGLRenderingContext, type: number, source: string) {
   return shader;
 }
 
-export function GreenScreenCanvas({ videoTrack, idleImageSrc, className, style }: Props) {
+export function GreenScreenCanvas({ videoTrack, audioTrack, idleImageSrc, className, style }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+
+  // Same attach LiveKitFace does for the panel path: a track's own
+  // attach() builds the <audio> element and wires autoplay for us.
+  // Attaching to our own element produced a silent track there too.
+  useEffect(() => {
+    if (!audioTrack || audioTrack.kind !== Track.Kind.Audio) return;
+    const element = audioTrack.attach() as HTMLAudioElement;
+    element.dataset.avatarAudio = "true";
+    element.autoplay = true;
+    element.muted = false;
+    element.volume = 1;
+    document.body.appendChild(element);
+    void element.play().catch((error) => {
+      console.warn("[avatar-studio] audio play() blocked", error);
+    });
+    return () => {
+      audioTrack.detach(element);
+      element.remove();
+    };
+  }, [audioTrack]);
 
   // The idle still, decoded once and kept as a texture source for whenever
   // there is no live frame to draw.

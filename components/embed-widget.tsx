@@ -364,6 +364,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         <div style={framelessStageStyle}>
           <GreenScreenCanvas
             videoTrack={isConnected ? videoTrack : null}
+            audioTrack={audioTrack}
             idleImageSrc={previewImageUrl ?? null}
             style={framelessCanvasStyle}
           />
