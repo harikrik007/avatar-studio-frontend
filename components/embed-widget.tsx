@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Track, type RemoteTrack } from "livekit-client";
 import { LiveKitFace } from "@/components/livekit-face";
+import { GreenScreenCanvas } from "@/components/green-screen-canvas";
 import { AvatarSession, type AvatarToolCall } from "@/lib/avatar-session";
 
 type Status =
@@ -30,6 +31,10 @@ type Props = {
   /** Shown as the panel's title. The agent's own name, so a visitor knows
    * who they are about to talk to before the face loads. */
   agentName?: string;
+  /** Float the avatar on the page with its background keyed out, instead of
+   * showing it inside the panel. Only works on an avatar built from a
+   * green-screen image; everything else about the session is identical. */
+  transparent?: boolean;
   origin?: string;
   previewVideoUrl?: string | null;
   previewImageUrl?: string | null;
@@ -49,7 +54,7 @@ const CARD_W = 340;
 const TRANSCRIPT_W = 280;
 const MIN_WIDE_PX = 560;
 
-export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, origin, previewVideoUrl, previewImageUrl }: Props) {
+export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, transparent, origin, previewVideoUrl, previewImageUrl }: Props) {
   const [status, setStatus] = useState<Status>("checking");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>(greetingLabel);
@@ -349,6 +354,98 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   // so it shows the whole last line rather than the newest delta.
   const lastLine = messages.length ? displayText(messages[messages.length - 1].text) : "";
 
+  if (transparent) {
+    // Three separate surfaces over the host page, the way the reference
+    // does it: the avatar keyed and floating, what she is saying in its own
+    // bubble, and the call controls in their own bar. No card, no border,
+    // nothing that reads as a video player.
+    return (
+      <div style={framelessShellStyle}>
+        <div style={framelessStageStyle}>
+          <GreenScreenCanvas
+            videoTrack={isConnected ? videoTrack : null}
+            idleImageSrc={previewImageUrl ?? null}
+            style={framelessCanvasStyle}
+          />
+        </div>
+
+        <div style={framelessLeftStyle}>
+          {lastLine || !isConnected ? (
+            <div style={bubbleStyle}>
+              <p style={bubbleTextStyle}>
+                {lastLine || (status === "connecting" ? "Connecting…" : greetingLabel)}
+              </p>
+            </div>
+          ) : null}
+
+          <div style={controlBarStyle}>
+            <button
+              type="button"
+              aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
+              aria-pressed={!micOn}
+              disabled={!isConnected}
+              onClick={toggleMic}
+              style={{
+                ...barButtonStyle,
+                background: !isConnected ? "rgba(255,255,255,0.12)"
+                  : micOn ? "rgba(255,255,255,0.16)" : "#dc2626",
+                boxShadow: isSpeaking ? "0 0 0 4px rgba(255,255,255,0.14)" : "none",
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="9" y="3" width="6" height="11" rx="3" fill="#fff" />
+                <path d={micOn ? "M5 11a7 7 0 0 0 14 0M12 18v3" : "M5 11a7 7 0 0 0 14 0M12 18v3M4 4l16 16"}
+                  stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              aria-label={isConnected ? "End call" : "Start call"}
+              title={callTitle}
+              disabled={busy || status === "busy"}
+              onClick={() => (isConnected ? void endSession("visitor_closed") : void connect())}
+              style={{
+                ...barButtonStyle,
+                background: isConnected ? "#dc2626" : busy ? "#d97706" : "#16a34a",
+                opacity: busy || status === "busy" ? 0.75 : 1,
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+                style={{ transform: isConnected ? "rotate(135deg)" : "none" }}>
+                <path
+                  d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.58 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"
+                  fill="#fff"
+                />
+              </svg>
+            </button>
+
+            <span style={barDividerStyle} />
+
+            {audioBlocked ? (
+              <button type="button" aria-label="Enable sound" style={barButtonStyle}
+                onClick={() => { void sessionRef.current?.startAudio().then((ok) => setAudioBlocked(!ok)); }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M4 9v6h4l5 4V5L8 9H4z" fill="#fff" />
+                  <path d="M17 8a5 5 0 0 1 0 8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            ) : null}
+
+            <button type="button" aria-label="Close" style={barButtonStyle}
+              onClick={() => { void endSession("visitor_closed"); askHost("close"); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 5l14 14M19 5L5 19" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          {errorMessage ? <p style={framelessErrorStyle}>{errorMessage}</p> : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={shellStyle}>
       {showTranscript ? (
@@ -498,6 +595,107 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     </div>
   );
 }
+
+// --- frameless ------------------------------------------------------------
+// Nothing here paints a background: the host page shows through everywhere
+// the avatar and these two surfaces are not.
+const framelessShellStyle: React.CSSProperties = {
+  position: "relative",
+  width: "100%",
+  height: "100vh",
+  background: "transparent",
+  fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+  overflow: "hidden",
+};
+
+const framelessStageStyle: React.CSSProperties = {
+  position: "absolute",
+  right: 0,
+  bottom: 0,
+  height: "100%",
+  display: "flex",
+  alignItems: "flex-end",
+  justifyContent: "flex-end",
+  pointerEvents: "none",
+};
+
+const framelessCanvasStyle: React.CSSProperties = {
+  height: "100%",
+  width: "auto",
+  display: "block",
+  // What makes her stand on the page rather than sit on top of it.
+  filter: "drop-shadow(0 24px 34px rgba(0,0,0,0.34))",
+};
+
+const framelessLeftStyle: React.CSSProperties = {
+  position: "absolute",
+  left: 0,
+  bottom: 0,
+  width: "62%",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-start",
+  gap: 12,
+  padding: "0 0 8px 4px",
+};
+
+const bubbleStyle: React.CSSProperties = {
+  maxWidth: "100%",
+  background: "rgba(18,18,20,0.72)",
+  backdropFilter: "blur(10px)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 18,
+  padding: "16px 18px",
+  boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
+};
+
+const bubbleTextStyle: React.CSSProperties = {
+  margin: 0,
+  color: "#f5f6f7",
+  fontSize: 15,
+  lineHeight: 1.45,
+  // Long answers scroll rather than growing the bubble off the page.
+  maxHeight: 132,
+  overflowY: "auto",
+};
+
+const controlBarStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 10,
+  background: "rgba(18,18,20,0.72)",
+  backdropFilter: "blur(10px)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 999,
+  padding: "8px 12px",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.3)",
+};
+
+const barButtonStyle: React.CSSProperties = {
+  width: 38,
+  height: 38,
+  borderRadius: "50%",
+  border: "none",
+  background: "rgba(255,255,255,0.16)",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  transition: "background 0.15s ease, box-shadow 0.15s ease",
+};
+
+const barDividerStyle: React.CSSProperties = {
+  width: 1,
+  height: 22,
+  background: "rgba(255,255,255,0.18)",
+};
+
+const framelessErrorStyle: React.CSSProperties = {
+  margin: 0,
+  color: "#fecaca",
+  fontSize: 12,
+  textShadow: "0 1px 6px rgba(0,0,0,0.6)",
+};
 
 const shellStyle: React.CSSProperties = {
   display: "flex",

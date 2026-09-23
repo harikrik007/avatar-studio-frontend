@@ -13,6 +13,7 @@ type EmbedConfig = {
   preview_video_url: string | null;
   preview_image_url: string | null;
   agent_name: string | null;
+  transparent?: boolean;
 };
 
 /**
@@ -64,6 +65,14 @@ export default async function EmbedPage({ params }: { params: Promise<{ key: str
   }
 
   return (
+    <>
+      {/* The document itself has to be transparent, or the host page has
+          nothing to show through: globals.css paints body, and an opaque
+          iframe document is opaque no matter what the parent does. Scoped
+          to this route and only when the agent asks for it. */}
+      {config.transparent ? (
+        <style>{"html,body{background:transparent !important;margin:0}"}</style>
+      ) : null}
     <EmbedWidget
       publicKey={key}
       accentColor={config.accent_color}
@@ -72,7 +81,9 @@ export default async function EmbedPage({ params }: { params: Promise<{ key: str
       previewVideoUrl={config.preview_video_url}
       previewImageUrl={config.preview_image_url}
       agentName={config.agent_name ?? undefined}
+      transparent={config.transparent ?? false}
     />
+    </>
   );
 }
 

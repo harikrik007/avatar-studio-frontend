@@ -31,6 +31,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
       accent_color: config.accent_color,
       greeting_label: config.greeting_label,
       preview_image_url: config.preview_image_url ?? null,
+      // widget.js needs this before it creates the panel: a frameless
+      // widget is a different shape with no background at all.
+      transparent: config.transparent ?? false,
     },
     {
       headers: {

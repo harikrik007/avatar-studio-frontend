@@ -134,6 +134,10 @@ type Agent = {
   // booting after Make live was clicked (see backend's _set_agent_live).
   // Never sent by this dashboard as a PATCH value.
   status: "draft" | "provisioning" | "live";
+  // Float the avatar on the customer's page with its background keyed out.
+  // Needs a green-screen avatar; off by default, so nothing changes for an
+  // agent that does not ask for it.
+  transparent?: boolean;
   created_at: string;
   documents: AgentDocument[];
   // Set once the agent has been made live at least once -- see the
@@ -876,6 +880,50 @@ function AvatarPicker({
   );
 }
 
+/**
+ * Frameless mode. Deliberately a choice rather than something inferred from
+ * the avatar: keying only looks right on a face built against a green
+ * screen, and picking that for someone by guessing at their avatar would be
+ * worse than letting them see the result and decide.
+ */
+function TransparentToggle({
+  checked,
+  onChange,
+  avatarName,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  avatarName?: string;
+}) {
+  const looksKeyable = /frameless|green/i.test(avatarName ?? "");
+  return (
+    <div style={{ marginTop: 12 }}>
+      <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          style={{ marginTop: 3 }}
+        />
+        <span>
+          <span style={{ fontWeight: 600 }}>Transparent (frameless)</span>
+          <p className="l-connector-note" style={{ margin: "2px 0 0" }}>
+            The avatar floats on the customer&apos;s page with its background removed,
+            instead of sitting in a chat panel. Needs an avatar built against a green
+            screen — on any other avatar the background stays.
+          </p>
+          {checked && !looksKeyable ? (
+            <p className="l-connector-note" style={{ margin: "4px 0 0", color: "#b45309" }}>
+              {avatarName ? `"${avatarName}"` : "This avatar"} doesn&apos;t look like a
+              green-screen avatar. Test it before going live.
+            </p>
+          ) : null}
+        </span>
+      </label>
+    </div>
+  );
+}
+
 function CreateAgentForm({
   readyAvatars,
   onCancel,
@@ -886,6 +934,7 @@ function CreateAgentForm({
   onCreated: () => void;
 }) {
   const [avatarId, setAvatarId] = useState(readyAvatars[0]?.id ?? "");
+  const [transparent, setTransparent] = useState(false);
   const [name, setName] = useState("");
   const [openingIntro, setOpeningIntro] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -910,6 +959,7 @@ function CreateAgentForm({
         opening_intro: openingIntro,
         system_prompt: systemPrompt,
         voice,
+        transparent,
         tools,
       }),
     });
@@ -952,6 +1002,11 @@ function CreateAgentForm({
       <div className="l-field">
         <label htmlFor="agent-avatar">Avatar</label>
         <AvatarPicker avatars={readyAvatars} selectedId={avatarId} onSelect={setAvatarId} />
+        <TransparentToggle
+          checked={transparent}
+          onChange={setTransparent}
+          avatarName={readyAvatars.find((a) => a.id === avatarId)?.name}
+        />
       </div>
       <div className="l-field">
         <label htmlFor="agent-name">Agent name</label>
@@ -1465,6 +1520,7 @@ function AgentDialog({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState("");
   const [avatarId, setAvatarId] = useState("");
+  const [transparent, setTransparent] = useState(false);
   const [openingIntro, setOpeningIntro] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [voice, setVoice] = useState(DEFAULT_VOICE);
@@ -1480,6 +1536,7 @@ function AgentDialog({
     if (agent) {
       setName(agent.name);
       setAvatarId(agent.avatar_id);
+      setTransparent(Boolean(agent.transparent));
       setOpeningIntro(agent.opening_intro);
       setSystemPrompt(agent.system_prompt);
       setVoice(agent.voice);
@@ -1495,7 +1552,7 @@ function AgentDialog({
   const avatar = agent ? avatars.find((a) => a.id === (avatarId || agent.avatar_id)) : null;
   const pickable = avatars.filter((a) => a.provider === "anam" && a.status === "ready");
 
-  async function save(patch: Partial<{ avatar_id: string; name: string; opening_intro: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
+  async function save(patch: Partial<{ avatar_id: string; transparent: boolean; name: string; opening_intro: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
     if (!agent) return;
     setBusy(true);
     if (patch.status) setStatusError(null);
@@ -1587,6 +1644,11 @@ function AgentDialog({
             <div className="l-field" style={{ marginTop: 14 }}>
               <label>Avatar</label>
               <AvatarPicker avatars={pickable} selectedId={avatarId} onSelect={setAvatarId} />
+              <TransparentToggle
+                checked={transparent}
+                onChange={setTransparent}
+                avatarName={pickable.find((a) => a.id === avatarId)?.name}
+              />
               {agent.status === "live" && avatarId !== agent.avatar_id ? (
                 <p className="l-connector-note">
                   This agent is live. Saving swaps the face for new conversations — anyone
@@ -1643,7 +1705,7 @@ function AgentDialog({
                 type="button"
                 className="l-btn l-btn-primary"
                 disabled={busy}
-                onClick={() => save({ avatar_id: avatarId, name, opening_intro: openingIntro, system_prompt: systemPrompt, voice, tools })}
+                onClick={() => save({ avatar_id: avatarId, transparent, name, opening_intro: openingIntro, system_prompt: systemPrompt, voice, tools })}
               >
                 {busy ? (
                   <>

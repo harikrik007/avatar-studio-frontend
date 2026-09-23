@@ -123,12 +123,18 @@
   var panelWrap = null;
   var open = false;
   var expanded = false;
+  // Set from the config fetch. A frameless widget is a different shape: no
+  // card, no background, and wide enough to hold the avatar next to what
+  // she is saying.
+  var frameless = false;
   // The panel is a portrait card: a head-and-shoulders avatar plus one
   // action. Expanded is the same card with room to actually see the face.
   var PANEL_W = 340;
   var PANEL_H = 560;
   var PANEL_W_BIG = 420;
   var PANEL_H_BIG = 680;
+  var FRAMELESS_W = 760;
+  var FRAMELESS_H = 620;
 
   function ensureFrame() {
     if (frame) return;
@@ -137,11 +143,18 @@
     panelWrap.style.cssText =
       "position:fixed;" + edgeStyle +
       (isTop ? "top:" : "bottom:") + panelOffset() + "px;" +
-      "width:" + PANEL_W + "px;height:" + PANEL_H + "px;" +
+      "width:" + (frameless ? FRAMELESS_W : PANEL_W) + "px;" +
+      "height:" + (frameless ? FRAMELESS_H : PANEL_H) + "px;" +
       "max-width:calc(100vw - 40px);max-height:calc(100vh - " + (panelOffset() + 24) + "px);" +
-      "border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,0.3);" +
-      "border:1px solid rgba(0,0,0,0.08);" +
-      "z-index:2147483000;display:none;background:#ffffff;transition:width 0.18s ease,height 0.18s ease;";
+      "z-index:2147483000;display:none;" +
+      "transition:width 0.18s ease,height 0.18s ease;" +
+      // Frameless paints nothing of its own: no card, no border, no
+      // shadow, and no background for the host page to fight with. The
+      // avatar's own drop-shadow is inside the frame.
+      (frameless
+        ? "background:transparent;border:0;box-shadow:none;overflow:visible;"
+        : "border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,0.3);" +
+          "border:1px solid rgba(0,0,0,0.08);background:#ffffff;");
 
     frame = document.createElement("iframe");
     frame.src = studioOrigin + "/embed/" + encodeURIComponent(publicKey);
@@ -152,7 +165,11 @@
     // further; that is a host-page configuration issue this script cannot
     // fix, only document (see the install instructions).
     frame.setAttribute("allow", "microphone");
-    frame.style.cssText = "width:100%;height:100%;border:0;display:block;";
+    frame.style.cssText = "width:100%;height:100%;border:0;display:block;" +
+      (frameless ? "background:transparent;" : "");
+    // Chrome paints an opaque canvas behind an iframe unless the embedded
+    // document is itself transparent; this is the other half of that.
+    frame.setAttribute("allowtransparency", "true");
     frame.title = "Chat widget";
 
     panelWrap.appendChild(frame);
@@ -203,7 +220,23 @@
       .fetch(studioOrigin + "/api/embed/config/" + encodeURIComponent(publicKey))
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (config) {
-        if (!config || !config.preview_image_url) return;
+        if (!config) return;
+        if (config.transparent) {
+          frameless = true;
+          if (panelWrap) {
+            // Already built (the visitor clicked before this landed) --
+            // rebuild the shape rather than leaving a white card.
+            panelWrap.style.background = "transparent";
+            panelWrap.style.border = "0";
+            panelWrap.style.boxShadow = "none";
+            panelWrap.style.borderRadius = "0";
+            panelWrap.style.overflow = "visible";
+            panelWrap.style.width = FRAMELESS_W + "px";
+            panelWrap.style.height = FRAMELESS_H + "px";
+            if (frame) frame.style.background = "transparent";
+          }
+        }
+        if (!config.preview_image_url) return;
         var img = new Image();
         // Only swap the icon once the face has actually loaded, so a
         // broken or slow image never leaves an empty hole where the
