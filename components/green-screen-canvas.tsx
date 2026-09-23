@@ -30,6 +30,12 @@ type Props = {
    * face. Without this the frameless path was silent: it drew the video
    * track and never went near the audio one. */
   audioTrack?: RemoteTrack | null;
+  /** Mutes the avatar's own voice without touching the visitor's mic --
+   * the "speaker" control, a separate concern from whether they are
+   * speaking. Applied to whichever <audio> element is currently attached,
+   * and re-applied immediately to a freshly attached one, so toggling it
+   * takes effect whether or not a track happens to be live at the time. */
+  speakerMuted?: boolean;
   /** Shown, keyed the same way, before a track exists. The avatar's own
    * green-screen still, so the idle state floats exactly like the live one
    * rather than turning back into a rectangle. */
@@ -114,10 +120,16 @@ function compile(gl: WebGLRenderingContext, type: number, source: string) {
   return shader;
 }
 
-export function GreenScreenCanvas({ videoTrack, audioTrack, idleImageSrc, className, style }: Props) {
+export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleImageSrc, className, style }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  // A ref, not the prop directly: the attach effect below only re-runs when
+  // audioTrack changes, so it needs the *current* mute preference at the
+  // moment a fresh element is created, not whatever speakerMuted closed
+  // over the last time a track arrived.
+  const speakerMutedRef = useRef(Boolean(speakerMuted));
 
   // Same attach LiveKitFace does for the panel path: a track's own
   // attach() builds the <audio> element and wires autoplay for us.
@@ -127,17 +139,26 @@ export function GreenScreenCanvas({ videoTrack, audioTrack, idleImageSrc, classN
     const element = audioTrack.attach() as HTMLAudioElement;
     element.dataset.avatarAudio = "true";
     element.autoplay = true;
-    element.muted = false;
+    element.muted = speakerMutedRef.current;
     element.volume = 1;
     document.body.appendChild(element);
+    audioElRef.current = element;
     void element.play().catch((error) => {
       console.warn("[avatar-studio] audio play() blocked", error);
     });
     return () => {
       audioTrack.detach(element);
       element.remove();
+      if (audioElRef.current === element) audioElRef.current = null;
     };
   }, [audioTrack]);
+
+  // The reactive half: applies a toggle to whichever element is currently
+  // attached, independent of the attach/detach lifecycle above.
+  useEffect(() => {
+    speakerMutedRef.current = Boolean(speakerMuted);
+    if (audioElRef.current) audioElRef.current.muted = Boolean(speakerMuted);
+  }, [speakerMuted]);
 
   // The idle still, decoded once and kept as a texture source for whenever
   // there is no live frame to draw.

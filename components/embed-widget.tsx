@@ -67,6 +67,16 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   const [expanded, setExpanded] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [hasRoom, setHasRoom] = useState(false);
+  // The frameless control bar's own expand -- a chevron revealing the
+  // keyboard and speaker buttons, distinct from `expanded` above (the
+  // panel widget's bigger-box toggle, sent to the host over postMessage).
+  const [controlsExpanded, setControlsExpanded] = useState(false);
+  const [textMode, setTextMode] = useState(false);
+  const [draftText, setDraftText] = useState("");
+  // Mutes the avatar's own voice -- a visitor choice, independent of
+  // audioBlocked (the browser refusing autoplay, which needs a retry, not
+  // a toggle) and independent of micOn (their own mic, not hers).
+  const [speakerMuted, setSpeakerMuted] = useState(false);
   const messageSeqRef = useRef(0);
   const logRef = useRef<HTMLDivElement | null>(null);
   const bubbleTextRef = useRef<HTMLParagraphElement | null>(null);
@@ -234,6 +244,12 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     setVideoTrack(null);
     setAudioTrack(null);
     setIsSpeaking(false);
+    // A fresh call should not inherit a typed draft, an open keyboard, or
+    // a mute the visitor may not remember setting three conversations ago.
+    setControlsExpanded(false);
+    setTextMode(false);
+    setDraftText("");
+    setSpeakerMuted(false);
 
     if (room) {
       try {
@@ -387,6 +403,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           <GreenScreenCanvas
             videoTrack={isConnected ? videoTrack : null}
             audioTrack={audioTrack}
+            speakerMuted={speakerMuted}
             idleImageSrc={previewImageUrl ?? null}
             style={framelessCanvasStyle}
           />
@@ -401,6 +418,45 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             </div>
           ) : null}
 
+          {textMode ? (
+            // Replaces the whole bar rather than sharing it with the call
+            // controls -- matches Docket's own reference exactly, and a
+            // visitor mid-sentence should not also be looking at a mic
+            // button that implies they should be talking instead.
+            <div style={textInputRowStyle}>
+              <input
+                type="text"
+                autoFocus
+                value={draftText}
+                onChange={(e) => setDraftText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const trimmed = draftText.trim();
+                    if (trimmed) sessionRef.current?.sendClientContent({ turns: trimmed });
+                    setDraftText("");
+                    setTextMode(false);
+                  } else if (e.key === "Escape") {
+                    setDraftText("");
+                    setTextMode(false);
+                  }
+                }}
+                placeholder="Ask a follow-up"
+                aria-label="Type a message"
+                style={textInputStyle}
+              />
+              <button
+                type="button"
+                aria-label="Cancel"
+                onClick={() => { setDraftText(""); setTextMode(false); }}
+                style={textInputCloseStyle}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 5l14 14M19 5L5 19" stroke="#111" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+          ) : (
           <div style={controlBarStyle}>
             <button
               type="button"
@@ -443,7 +499,59 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               </svg>
             </button>
 
+            {isConnected ? (
+              <button
+                type="button"
+                aria-label={controlsExpanded ? "Fewer controls" : "More controls"}
+                aria-expanded={controlsExpanded}
+                onClick={() => setControlsExpanded((v) => !v)}
+                style={barButtonStyle}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d={controlsExpanded ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6"}
+                    stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ) : null}
+
             <span style={barDividerStyle} />
+
+            {isConnected && controlsExpanded ? (
+              <>
+                <button
+                  type="button"
+                  aria-label="Type a message"
+                  onClick={() => setTextMode(true)}
+                  style={barButtonStyle}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="3" y="6" width="18" height="12" rx="2.5" stroke="#fff" strokeWidth="1.6" />
+                    <path d="M6.5 10h.01M9.5 10h.01M12.5 10h.01M15.5 10h.01M17.5 10h.01M6.5 14h8"
+                      stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                </button>
+
+                <button
+                  type="button"
+                  aria-label={speakerMuted ? "Unmute avatar" : "Mute avatar"}
+                  aria-pressed={speakerMuted}
+                  onClick={() => setSpeakerMuted((v) => !v)}
+                  style={{
+                    ...barButtonStyle,
+                    background: speakerMuted ? "#dc2626" : "rgba(255,255,255,0.16)",
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M4 9v6h4l5 4V5L8 9H4z" fill="#fff" />
+                    {speakerMuted ? (
+                      <path d="M16 8l6 8M22 8l-6 8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                    ) : (
+                      <path d="M17 8a5 5 0 0 1 0 8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                    )}
+                  </svg>
+                </button>
+              </>
+            ) : null}
 
             {audioBlocked ? (
               <button type="button" aria-label="Enable sound" style={barButtonStyle}
@@ -462,6 +570,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               </svg>
             </button>
           </div>
+          )}
 
           {errorMessage ? <p style={framelessErrorStyle}>{errorMessage}</p> : null}
         </div>
@@ -722,6 +831,46 @@ const barDividerStyle: React.CSSProperties = {
   width: 1,
   height: 22,
   background: "rgba(255,255,255,0.18)",
+};
+
+// Replaces the whole control bar while typing -- same glass surface as
+// the bubble above it, so the two read as one system rather than a new
+// piece of UI appearing.
+const textInputRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  width: "100%",
+  background: "rgba(18,18,20,0.72)",
+  backdropFilter: "blur(10px)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  borderRadius: 999,
+  padding: "6px 6px 6px 16px",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.3)",
+};
+
+const textInputStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  background: "transparent",
+  border: "none",
+  outline: "none",
+  color: "#f5f6f7",
+  fontSize: 14,
+  fontFamily: "inherit",
+};
+
+const textInputCloseStyle: React.CSSProperties = {
+  width: 32,
+  height: 32,
+  borderRadius: "50%",
+  border: "none",
+  background: "rgba(255,255,255,0.85)",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  flexShrink: 0,
 };
 
 const framelessErrorStyle: React.CSSProperties = {
