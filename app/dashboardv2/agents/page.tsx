@@ -30,6 +30,9 @@ type Avatar = {
   preview_video_url?: string | null;
   // Anam's own CDN still, which is what the picker shows.
   preview_image_url?: string | null;
+  // Measured from that still: only a face shot against a green screen can
+  // be shown with its background removed.
+  supports_transparency?: boolean;
 };
 
 type ToolParameter = {
@@ -873,6 +876,18 @@ function AvatarPicker({
               </span>
             )}
             <span style={{ fontSize: 13, fontWeight: selected ? 600 : 400 }}>{a.name}</span>
+            {a.supports_transparency ? (
+              <span
+                title="Shot against a green screen — can be shown with no background"
+                style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
+                  color: "#047857", background: "#d1fae5",
+                  borderRadius: 999, padding: "2px 8px",
+                }}
+              >
+                TRANSPARENT READY
+              </span>
+            ) : null}
           </button>
         );
       })}
@@ -889,13 +904,18 @@ function AvatarPicker({
 function TransparentToggle({
   checked,
   onChange,
-  avatarName,
+  avatar,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
-  avatarName?: string;
+  avatar?: Avatar;
 }) {
-  const looksKeyable = /frameless|green/i.test(avatarName ?? "");
+  // Measured from the avatar's own preview still by the catalogue sync, not
+  // inferred from its name. Ticking this on a face with a studio backdrop
+  // does nothing at all, and the failure looks like a broken feature rather
+  // than a wrong choice -- so the answer belongs here, before the tick.
+  const keyable = Boolean(avatar?.supports_transparency);
+  const avatarName = avatar?.name;
   return (
     <div style={{ marginTop: 12 }}>
       <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
@@ -912,10 +932,12 @@ function TransparentToggle({
             instead of sitting in a chat panel. Needs an avatar built against a green
             screen — on any other avatar the background stays.
           </p>
-          {checked && !looksKeyable ? (
-            <p className="l-connector-note" style={{ margin: "4px 0 0", color: "#b45309" }}>
-              {avatarName ? `"${avatarName}"` : "This avatar"} doesn&apos;t look like a
-              green-screen avatar. Test it before going live.
+          {checked && !keyable ? (
+            <p className="l-connector-note" style={{ margin: "4px 0 0", color: "#b91c1c" }}>
+              {avatarName ? `"${avatarName}"` : "This avatar"} wasn&apos;t shot against a
+              green screen, so there is no background to remove — it will appear in a
+              plain rectangle. Pick an avatar marked{" "}
+              <strong>Transparent ready</strong> instead.
             </p>
           ) : null}
         </span>
@@ -1005,7 +1027,7 @@ function CreateAgentForm({
         <TransparentToggle
           checked={transparent}
           onChange={setTransparent}
-          avatarName={readyAvatars.find((a) => a.id === avatarId)?.name}
+          avatar={readyAvatars.find((a) => a.id === avatarId)}
         />
       </div>
       <div className="l-field">
@@ -1647,7 +1669,7 @@ function AgentDialog({
               <TransparentToggle
                 checked={transparent}
                 onChange={setTransparent}
-                avatarName={pickable.find((a) => a.id === avatarId)?.name}
+                avatar={pickable.find((a) => a.id === avatarId)}
               />
               {agent.status === "live" && avatarId !== agent.avatar_id ? (
                 <p className="l-connector-note">
