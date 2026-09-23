@@ -76,8 +76,11 @@
   // images.
   var transparentAvatarUrl = null;
   // Smaller than the open panel's full figure on purpose -- this is a
-  // preview, not the conversation itself.
-  var CLOSED_FRAMELESS_H = 150;
+  // preview, not the conversation itself. Sized against Docket's own
+  // reference: her closed-state cutout reads as a real presence on the
+  // page, roughly 40% of a typical viewport's height, not an icon-sized
+  // hint of one.
+  var CLOSED_FRAMELESS_H = 280;
 
   // Ports the same green-key math the open panel's WebGL shader uses
   // (components/green-screen-canvas.tsx) to a plain 2-D canvas. A
