@@ -69,6 +69,57 @@
   // does) the bubble is the plain icon it has always been -- the widget has
   // to be usable on a slow network and on a key with no avatar preview.
   var avatarUrl = null;
+  // The same still, background keyed out, for a frameless agent's closed
+  // bubble -- a small cutout floating with no circle around it, the same
+  // composition the open panel uses at full size. Separate from avatarUrl
+  // because the two bubbles are different shapes, not just different
+  // images.
+  var transparentAvatarUrl = null;
+  // Smaller than the open panel's full figure on purpose -- this is a
+  // preview, not the conversation itself.
+  var CLOSED_FRAMELESS_H = 150;
+
+  // Ports the same green-key math the open panel's WebGL shader uses
+  // (components/green-screen-canvas.tsx) to a plain 2-D canvas. A
+  // per-pixel JS loop is exactly what that shader exists to avoid for a
+  // live 25fps video track -- but this runs once, against one still image,
+  // where the simplest correct tool is the right one.
+  function keyGreenScreenStill(img, done) {
+    var MIN_GREEN = 90, GREEN_BIAS = 1.15, SOFTNESS = 28, SPILL = 0.45;
+    var keyRamp = Math.max(8, SOFTNESS * 0.55);
+    try {
+      var canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      var ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      var frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var px = frame.data;
+      for (var i = 0; i < px.length; i += 4) {
+        var r = px[i], g = px[i + 1], b = px[i + 2];
+        var maxC = Math.max(r, g, b);
+        var minC = Math.min(r, g, b);
+        var sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
+        var greenDominance = g - Math.max(r, b);
+        var isGreen = g === maxC && g > MIN_GREEN && g > r * GREEN_BIAS &&
+          g > b * GREEN_BIAS && sat > 0.08 && greenDominance > 2;
+        if (isGreen) {
+          var keyedAmount = Math.min(1, Math.max(0,
+            (greenDominance - 2) / keyRamp + (sat - 0.08) * 1.8));
+          px[i + 3] = Math.round(px[i + 3] * (1 - keyedAmount));
+        } else if (greenDominance > 8 && g > 70) {
+          px[i + 1] = Math.max(0, g - greenDominance * SPILL);
+        }
+      }
+      ctx.putImageData(frame, 0, 0);
+      done(canvas.toDataURL("image/png"));
+    } catch (e) {
+      // A tainted canvas (the still served without CORS) throws on
+      // getImageData -- fall back to the original, unkeyed still rather
+      // than leaving the bubble empty.
+      done(null);
+    }
+  }
 
   var CHAT_ICON =
     '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
@@ -98,6 +149,29 @@
     // Hidden while open -- the panel carries its own close button, and a
     // second one floating under it was just another way to do the same
     // thing, sitting in the visitor's way.
+    var showing = open ? "none" : "flex";
+
+    if (frameless && transparentAvatarUrl) {
+      // No circle, no ring, no background of any colour: the keyed cutout
+      // standing directly on the host page, the same composition the open
+      // panel uses at full size, just smaller -- a preview of who is about
+      // to talk, not the conversation itself.
+      bubble.style.cssText =
+        "position:fixed;" + edgeStyle + vEdgeStyle +
+        "border:none;background:transparent;padding:0;box-shadow:none;" +
+        "cursor:pointer;z-index:2147483000;flex-direction:column;display:" + showing + ";" +
+        "align-items:center;justify-content:center;gap:8px;transition:transform 0.15s ease;" +
+        "font:600 12px/1 system-ui,-apple-system,'Segoe UI',sans-serif;";
+      bubble.innerHTML =
+        '<img src="' + escapeHtml(transparentAvatarUrl) + '" alt="" ' +
+        'style="height:' + CLOSED_FRAMELESS_H + 'px;width:auto;display:block;' +
+        'filter:drop-shadow(0 10px 22px rgba(0,0,0,0.35));">' +
+        '<span style="background:#fff;color:#111;border-radius:999px;padding:5px 12px;' +
+        'box-shadow:0 4px 14px rgba(0,0,0,0.18);white-space:nowrap;">' +
+        escapeHtml(label) + "</span>";
+      return;
+    }
+
     var showFace = Boolean(avatarUrl);
     bubble.style.cssText = bubbleBaseStyle(!showFace);
     if (!showFace) {
@@ -242,6 +316,32 @@
           }
         }
         if (!config.preview_image_url) return;
+
+        if (config.transparent) {
+          // Keying needs real pixels, not just something to point an <img>
+          // at, so the still is loaded here first and run through the same
+          // canvas pass the open panel's WebGL shader does at 25fps --
+          // once, since this is one image, not a video.
+          var srcImg = new Image();
+          srcImg.crossOrigin = "anonymous"; // untainted canvas needs this
+          srcImg.onload = function () {
+            keyGreenScreenStill(srcImg, function (keyedUrl) {
+              // A still that turned out not to be green-screened at all
+              // (ticked transparent by mistake) keys to a no-op -- falling
+              // back to the raw still here at least keeps a real photo on
+              // screen rather than nothing.
+              transparentAvatarUrl = keyedUrl || config.preview_image_url;
+              renderBubble();
+              if (panelWrap) {
+                panelWrap.style[isTop ? "top" : "bottom"] = panelOffset() + "px";
+              }
+            });
+          };
+          srcImg.onerror = function () { /* icon stays */ };
+          srcImg.src = config.preview_image_url;
+          return;
+        }
+
         var img = new Image();
         // Only swap the icon once the face has actually loaded, so a
         // broken or slow image never leaves an empty hole where the
