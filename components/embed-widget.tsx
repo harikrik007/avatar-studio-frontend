@@ -69,6 +69,13 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   const [hasRoom, setHasRoom] = useState(false);
   const messageSeqRef = useRef(0);
   const logRef = useRef<HTMLDivElement | null>(null);
+  const bubbleTextRef = useRef<HTMLParagraphElement | null>(null);
+  const showTranscript = hasRoom && messages.length > 0;
+  // Without the column, the caption/bubble is the only view of the
+  // conversation -- so it shows the whole last line rather than the
+  // newest delta. Declared here, ahead of the auto-scroll effect below,
+  // rather than down by the render where it is used.
+  const lastLine = messages.length ? displayText(messages[messages.length - 1].text) : "";
 
   const sessionRef = useRef<AvatarSession | null>(null);
   const roomNameRef = useRef<string | null>(null);
@@ -127,6 +134,16 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  // The frameless bubble has its own scroller (one reply, not a log), and
+  // needed the same fix: a long answer that outgrows the fixed height
+  // otherwise sits frozen at scrollTop 0 -- the start of the reply stays
+  // pinned on screen while the rest is hidden below, with nothing to say
+  // there is more unless a visitor thinks to scroll a chat bubble.
+  useEffect(() => {
+    const el = bubbleTextRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [lastLine]);
 
   function appendTranscript(role: "assistant" | "user", text: string) {
     if (!text) return;
@@ -231,7 +248,11 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       }
     }
 
-    askHost("resize", { width: CARD_W });
+    // Only the panel widget's transcript column is a request to widen the
+    // host's box -- frameless has its own fixed size, set from config, and
+    // shrinking it to the panel's width on every hang-up is what left the
+    // avatar squeezed into a box sized for a different layout.
+    if (!transparent) askHost("resize", { width: CARD_W });
     setStatus(reason === "idle_timeout" ? "ended" : "idle");
     setTranscript(
       reason === "idle_timeout"
@@ -305,7 +326,12 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       );
 
       setMessages([]);
-      askHost("resize", { width: CARD_W + TRANSCRIPT_W });
+      // Same reasoning as the shrink on hang-up below: this widens the host
+      // box for the panel's side transcript, and frameless does not have
+      // one -- asking anyway squeezed its fixed-width layout down to 620px
+      // on every connect, which is what cropped the avatar and left the
+      // reply bubble too narrow not to scroll.
+      if (!transparent) askHost("resize", { width: CARD_W + TRANSCRIPT_W });
       sessionRef.current = session;
       roomNameRef.current = session.room.name;
       ownsSessionRef.current = true;
@@ -338,7 +364,6 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         : busy ? "#d97706"
           : "#6b7280";
 
-  const showTranscript = hasRoom && messages.length > 0;
   // The button is an icon, so what it would have said lives in its tooltip
   // and its aria-label instead of disappearing.
   const callTitle = isConnected
@@ -350,9 +375,6 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         : status === "busy"
           ? "All agents are busy"
           : "Start call";
-  // Without the column, the caption is the only view of the conversation --
-  // so it shows the whole last line rather than the newest delta.
-  const lastLine = messages.length ? displayText(messages[messages.length - 1].text) : "";
 
   if (transparent) {
     // Three separate surfaces over the host page, the way the reference
@@ -373,7 +395,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         <div style={framelessLeftStyle}>
           {lastLine || !isConnected ? (
             <div style={bubbleStyle}>
-              <p style={bubbleTextStyle}>
+              <p ref={bubbleTextRef} style={bubbleTextStyle}>
                 {lastLine || (status === "connecting" ? "Connecting…" : greetingLabel)}
               </p>
             </div>
