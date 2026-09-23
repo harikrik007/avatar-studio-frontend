@@ -367,52 +367,78 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       ) : null}
 
       <div style={panelStyle}>
-      <header style={headerStyle}>
-        <span style={{ ...brandStyle, color: accentColor }}>{agentName || "Avatar"}</span>
-        <span style={windowControlsStyle}>
-          <button type="button" aria-label="Minimise" style={iconButtonStyle}
-            onClick={() => askHost("close")}>
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-              <path d="M3 7h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
-          </button>
-          <button type="button" aria-label={expanded ? "Shrink" : "Expand"} style={iconButtonStyle}
-            onClick={() => { const next = !expanded; setExpanded(next); askHost("expand", { expanded: next }); }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <path d="M2 5V2h3M12 9v3H9M12 5V2H9M2 9v3h3" stroke="currentColor"
-                strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <button type="button" aria-label="Close" style={{ ...iconButtonStyle, color: "#dc2626" }}
-            onClick={() => { void endSession("visitor_closed"); askHost("close"); }}>
-            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-              <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </button>
-        </span>
-      </header>
-
-      <div style={statusRowStyle}>
-        <span style={statusLeftStyle}>
-          <span style={{ ...statusDotStyle, background: statusColor }} />
-          {statusLabel}
-        </span>
-        <button type="button" style={shareButtonStyle} onClick={() => void share()}>
-          {shared ? "COPIED" : "SHARE"}
-        </button>
-      </div>
-
-      <div style={stageWrapStyle}>
-        <div style={stageStyle}>
+        {/* The face is the panel, not a picture inside it. Everything else
+            floats over it on two gradient scrims -- without those, white
+            text lands on whatever the avatar happens to be wearing. */}
+        <div style={videoLayerStyle}>
           <LiveKitFace
             videoTrack={videoTrack}
             audioTrack={audioTrack}
             isConnected={isConnected}
-            width={STAGE_W}
-            height={STAGE_H}
+            width="100%"
+            height="100%"
             idleVideoSrc={previewVideoUrl ?? undefined}
             idleImageSrc={previewImageUrl ?? null}
           />
+        </div>
+
+        <div style={topScrimStyle}>
+          <header style={headerStyle}>
+            <span style={brandStyle}>{agentName || "Avatar"}</span>
+            <span style={windowControlsStyle}>
+              <button type="button" aria-label="Minimise" style={iconButtonStyle}
+                onClick={() => askHost("close")}>
+                <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                  <path d="M3 7h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button type="button" aria-label={expanded ? "Shrink" : "Expand"} style={iconButtonStyle}
+                onClick={() => { const next = !expanded; setExpanded(next); askHost("expand", { expanded: next }); }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M2 5V2h3M12 9v3H9M12 5V2H9M2 9v3h3" stroke="currentColor"
+                    strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button type="button" aria-label="Close" style={iconButtonStyle}
+                onClick={() => { void endSession("visitor_closed"); askHost("close"); }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                  <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </span>
+          </header>
+
+          <div style={statusRowStyle}>
+            <span style={statusLeftStyle}>
+              <span style={{ ...statusDotStyle, background: statusColor }} />
+              {statusLabel}
+            </span>
+            <button type="button" style={shareButtonStyle} onClick={() => void share()}>
+              {shared ? "COPIED" : "SHARE"}
+            </button>
+          </div>
+        </div>
+
+        <div style={bottomScrimStyle}>
+          {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
+
+          {/* The last line, for when there is no room for the column beside
+              the card (a phone). Without either, a visitor who cannot hear
+              has no way to follow the conversation at all. */}
+          {isConnected && !showTranscript && (lastLine || transcript) ? (
+            <p style={transcriptStyle}>{lastLine || transcript}</p>
+          ) : null}
+
+          {audioBlocked ? (
+            <button type="button" style={enableSoundStyle}
+              onClick={() => {
+                void sessionRef.current?.startAudio().then((ok) => setAudioBlocked(!ok));
+              }}
+            >
+              Enable sound
+            </button>
+          ) : null}
+
           <div style={controlsRowStyle}>
             <button
               type="button"
@@ -427,7 +453,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                 // Speaking is the avatar's turn, not the visitor's -- the
                 // ring is the only place that distinction is visible at a
                 // glance.
-                boxShadow: isSpeaking ? "0 0 0 6px rgba(22,163,74,0.22)" : "0 4px 12px rgba(0,0,0,0.25)",
+                boxShadow: isSpeaking ? "0 0 0 6px rgba(22,163,74,0.22)" : "0 4px 12px rgba(0,0,0,0.35)",
               }}
             >
               {micOn ? (
@@ -469,43 +495,14 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           </div>
         </div>
       </div>
-
-      {/* The last line, for when there is no room for the column beside the
-          card (a phone). Without either, a visitor who cannot hear has no
-          way to follow the conversation at all. */}
-      {isConnected && !showTranscript && (lastLine || transcript) ? (
-        <p style={transcriptStyle}>{lastLine || transcript}</p>
-      ) : null}
-
-      {audioBlocked ? (
-        <button
-          type="button"
-          style={{ ...secondaryButtonStyle, borderColor: accentColor, color: accentColor }}
-          onClick={() => {
-            void sessionRef.current?.startAudio().then((ok) => setAudioBlocked(!ok));
-          }}
-        >
-          Enable sound
-        </button>
-      ) : null}
-
-      {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
-
-      </div>
     </div>
   );
 }
 
-const STAGE_W = 312;
-// The call button moved onto the video, so the height the CONNECT pill
-// used to occupy goes to the face instead -- which is the thing a visitor
-// is actually looking at.
-const STAGE_H = 420;
-
 const shellStyle: React.CSSProperties = {
   display: "flex",
   height: "100vh",
-  background: "#ffffff",
+  background: "#0b0f14",
 };
 
 const transcriptPanelStyle: React.CSSProperties = {
@@ -552,21 +549,52 @@ const visitorLineStyle: React.CSSProperties = {
 };
 
 const panelStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
+  position: "relative",
   flex: 1,
   minWidth: 0,
   height: "100vh",
-  boxSizing: "border-box",
+  overflow: "hidden",
+  background: "#0b0f14",
   fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
-  background: "#ffffff",
+};
+
+const videoLayerStyle: React.CSSProperties = {
+  position: "absolute",
+  inset: 0,
+};
+
+// Chrome floats over live video, so it carries its own contrast rather than
+// trusting whatever the avatar is standing in front of.
+const topScrimStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  paddingBottom: 18,
+  background: "linear-gradient(to bottom, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.28) 58%, transparent 100%)",
+  pointerEvents: "none",
+};
+
+const bottomScrimStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: 0,
+  left: 0,
+  right: 0,
+  paddingTop: 28,
+  background: "linear-gradient(to top, rgba(0,0,0,0.66) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  pointerEvents: "none",
 };
 
 const headerStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "12px 14px",
+  padding: "12px 14px 0",
+  pointerEvents: "auto",
 };
 
 const brandStyle: React.CSSProperties = {
@@ -574,6 +602,8 @@ const brandStyle: React.CSSProperties = {
   fontWeight: 800,
   letterSpacing: "0.04em",
   textTransform: "uppercase",
+  color: "#ffffff",
+  textShadow: "0 1px 6px rgba(0,0,0,0.5)",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -584,39 +614,41 @@ const windowControlsStyle: React.CSSProperties = {
   alignItems: "center",
   gap: 4,
   flexShrink: 0,
+  pointerEvents: "auto",
 };
 
 const iconButtonStyle: React.CSSProperties = {
-  width: 26,
-  height: 26,
+  width: 28,
+  height: 28,
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
   border: "none",
-  background: "transparent",
-  color: "#374151",
-  borderRadius: 6,
+  background: "rgba(0,0,0,0.32)",
+  color: "#ffffff",
+  borderRadius: 8,
   cursor: "pointer",
   padding: 0,
+  backdropFilter: "blur(4px)",
 };
 
 const statusRowStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  padding: "8px 14px",
-  borderTop: "1px solid #eceef0",
-  borderBottom: "1px solid #eceef0",
+  padding: "10px 14px 0",
+  pointerEvents: "auto",
 };
 
 const statusLeftStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 8,
-  fontSize: 12,
+  fontSize: 11,
   fontWeight: 700,
-  letterSpacing: "0.08em",
-  color: "#111827",
+  letterSpacing: "0.09em",
+  color: "#ffffff",
+  textShadow: "0 1px 6px rgba(0,0,0,0.5)",
 };
 
 const statusDotStyle: React.CSSProperties = {
@@ -624,50 +656,33 @@ const statusDotStyle: React.CSSProperties = {
   height: 8,
   borderRadius: "50%",
   display: "inline-block",
+  boxShadow: "0 0 0 2px rgba(0,0,0,0.25)",
 };
 
 const shareButtonStyle: React.CSSProperties = {
-  border: "1px solid #e2e5e8",
-  background: "#fff",
-  borderRadius: 8,
-  padding: "6px 14px",
-  fontSize: 11,
+  border: "1px solid rgba(255,255,255,0.35)",
+  background: "rgba(0,0,0,0.32)",
+  borderRadius: 999,
+  padding: "5px 13px",
+  fontSize: 10,
   fontWeight: 700,
-  letterSpacing: "0.06em",
-  color: "#111827",
+  letterSpacing: "0.08em",
+  color: "#ffffff",
   cursor: "pointer",
-};
-
-const stageWrapStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "14px 14px 16px",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  minHeight: 0,
-};
-
-const stageStyle: React.CSSProperties = {
-  position: "relative",
-  borderRadius: 14,
-  overflow: "hidden",
-  background: "#e8ece7",
-  lineHeight: 0,
+  backdropFilter: "blur(4px)",
 };
 
 const controlsRowStyle: React.CSSProperties = {
-  position: "absolute",
-  left: 0,
-  right: 0,
-  bottom: 14,
   display: "flex",
   justifyContent: "center",
   gap: 14,
+  padding: "2px 0 16px",
+  pointerEvents: "auto",
 };
 
 const roundButtonStyle: React.CSSProperties = {
-  width: 46,
-  height: 46,
+  width: 48,
+  height: 48,
   borderRadius: "50%",
   border: "none",
   display: "inline-flex",
@@ -675,32 +690,37 @@ const roundButtonStyle: React.CSSProperties = {
   justifyContent: "center",
   cursor: "pointer",
   transition: "box-shadow 0.15s ease, background 0.15s ease",
-  boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+  boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
 };
 
 const transcriptStyle: React.CSSProperties = {
   fontSize: 12,
   lineHeight: 1.4,
-  color: "#4b5563",
+  color: "#f3f4f6",
   textAlign: "center",
-  margin: "0 14px 4px",
+  margin: "0 16px",
   maxHeight: 34,
   overflow: "hidden",
+  textShadow: "0 1px 6px rgba(0,0,0,0.65)",
 };
 
 const errorStyle: React.CSSProperties = {
   fontSize: 12,
-  color: "#b91c1c",
+  color: "#fecaca",
   textAlign: "center",
-  margin: "0 14px 6px",
+  margin: "0 16px",
+  textShadow: "0 1px 6px rgba(0,0,0,0.65)",
 };
 
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: "6px 14px",
+const enableSoundStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.45)",
+  background: "rgba(0,0,0,0.38)",
+  color: "#ffffff",
   borderRadius: 999,
-  border: "1px solid",
-  background: "transparent",
+  padding: "6px 14px",
   fontSize: 12,
   fontWeight: 600,
   cursor: "pointer",
+  pointerEvents: "auto",
 };
+

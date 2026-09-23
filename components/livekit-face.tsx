@@ -8,8 +8,11 @@ type LiveKitFaceProps = {
   videoTrack: RemoteTrack | null;
   audioTrack: RemoteTrack | null;
   isConnected: boolean;
-  width?: number;
-  height?: number;
+  /** Numbers for a fixed box (the dashboard's dialog), or a CSS length like
+   * "100%" to fill a container -- which is what the embed panel does now
+   * that the face is the panel rather than a picture inside it. */
+  width?: number | string;
+  height?: number | string;
   /** Shown before a real track exists. Defaults to the single generic
    * placeholder every other caller (dashboard test panel, the third-party
    * embed widget) already relies on -- pass a specific avatar's own idle
@@ -94,16 +97,12 @@ export function LiveKitFace({
         autoPlay
         playsInline
         muted
-        width={width}
-        height={height}
         style={{ width, height, objectFit: "cover", visibility: showLive ? "visible" : "hidden" }}
       />
       {showLive ? null : idleImageSrc ? (
         <img
           src={idleImageSrc}
           alt=""
-          width={width}
-          height={height}
           style={{ position: "absolute", inset: 0, width, height, objectFit: "cover" }}
         />
       ) : (
@@ -113,8 +112,6 @@ export function LiveKitFace({
           loop
           muted
           playsInline
-          width={width}
-          height={height}
           style={{ position: "absolute", inset: 0, width, height, objectFit: "cover" }}
         />
       )}
