@@ -644,7 +644,18 @@ const framelessStageStyle: React.CSSProperties = {
 
 const framelessCanvasStyle: React.CSSProperties = {
   height: "100%",
-  width: "auto",
+  // Pinned, not auto: the canvas's own backing buffer is whatever the
+  // current source is -- square (1152x1152) for the idle still, portrait
+  // (768x1152) for Anam's live render -- and at width:auto the CSS box
+  // followed that shape directly, so the instant a session connected the
+  // whole box changed width and she visibly jumped sideways. aspectRatio
+  // fixes the box to the live render's own shape regardless of which
+  // source is actually drawn; objectFit:cover then fills that fixed box
+  // from either source without distorting it, cropping the idle still's
+  // extra width the same way object-fit already does for the panel
+  // widget's video element.
+  aspectRatio: "768 / 1152",
+  objectFit: "cover",
   display: "block",
   // What makes her stand on the page rather than sit on top of it.
   filter: "drop-shadow(0 24px 34px rgba(0,0,0,0.34))",
