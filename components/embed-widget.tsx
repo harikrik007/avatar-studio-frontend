@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Track, type RemoteTrack } from "livekit-client";
 import { LiveKitFace } from "@/components/livekit-face";
 import { GreenScreenCanvas } from "@/components/green-screen-canvas";
@@ -42,6 +42,29 @@ type Props = {
 
 type Message = { id: number; role: "assistant" | "user"; text: string; at: number };
 
+// Only http(s):// and www. are ever turned into links, so nothing a model
+// says can become a javascript: or data: href.
+const URL_PATTERN = /((?:https?:\/\/|www\.)[^\s<>"']+)/i;
+
+/** Renders text with its web addresses as real links. The panel lives in an
+ * iframe, so they open in a new tab rather than navigating the widget away.
+ * Trailing sentence punctuation stays outside the link -- "...orchards." is
+ * the end of a sentence, not part of the address. */
+function linkify(text: string, linkStyle: React.CSSProperties) {
+  return text.split(URL_PATTERN).map((part, i) => {
+    if (i % 2 === 0) return part;
+    const trailing = part.match(/[.,;:!?)\]]+$/)?.[0] ?? "";
+    const url = trailing ? part.slice(0, -trailing.length) : part;
+    const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    return (
+      <Fragment key={i}>
+        <a href={href} target="_blank" rel="noopener noreferrer" style={linkStyle}>{url}</a>
+        {trailing}
+      </Fragment>
+    );
+  });
+}
+
 // Gemini sends transcripts as deltas -- "Hi," then " I'm" then " Riya" --
 // so a chunk is not an utterance. Consecutive chunks from the same speaker
 // this close together are the same sentence still being said, and joining
@@ -79,13 +102,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   const [speakerMuted, setSpeakerMuted] = useState(false);
   const messageSeqRef = useRef(0);
   const logRef = useRef<HTMLDivElement | null>(null);
-  const bubbleTextRef = useRef<HTMLParagraphElement | null>(null);
+  const bubbleTextRef = useRef<HTMLDivElement | null>(null);
+  const captionRef = useRef<HTMLDivElement | null>(null);
   const showTranscript = hasRoom && messages.length > 0;
-  // Without the column, the caption/bubble is the only view of the
-  // conversation -- so it shows the whole last line rather than the
-  // newest delta. Declared here, ahead of the auto-scroll effect below,
-  // rather than down by the render where it is used.
-  const lastLine = messages.length ? displayText(messages[messages.length - 1].text) : "";
 
   const sessionRef = useRef<AvatarSession | null>(null);
   const roomNameRef = useRef<string | null>(null);
@@ -145,15 +164,17 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // The frameless bubble has its own scroller (one reply, not a log), and
-  // needed the same fix: a long answer that outgrows the fixed height
-  // otherwise sits frozen at scrollTop 0 -- the start of the reply stays
-  // pinned on screen while the rest is hidden below, with nothing to say
-  // there is more unless a visitor thinks to scroll a chat bubble.
+  // The frameless bubble and the narrow-panel caption each hold the whole
+  // conversation in their own scroller, and need the same pin: a long
+  // answer that outgrows the fixed height otherwise sits frozen at
+  // scrollTop 0 -- the start stays on screen while the newest words are
+  // hidden below. A visitor can still scroll up to reread; each new
+  // message just brings the latest one back into view.
   useEffect(() => {
-    const el = bubbleTextRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [lastLine]);
+    for (const el of [bubbleTextRef.current, captionRef.current]) {
+      if (el) el.scrollTop = el.scrollHeight;
+    }
+  }, [messages]);
 
   function appendTranscript(role: "assistant" | "user", text: string) {
     if (!text) return;
@@ -410,11 +431,24 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         </div>
 
         <div style={framelessLeftStyle}>
-          {lastLine || !isConnected ? (
+          {messages.length || !isConnected ? (
             <div style={bubbleStyle}>
-              <p ref={bubbleTextRef} style={bubbleTextStyle}>
-                {lastLine || (status === "connecting" ? "Connecting…" : greetingLabel)}
-              </p>
+              <div ref={bubbleTextRef} style={bubbleTextStyle}>
+                {messages.length ? (
+                  messages.map((m) => (
+                    <p
+                      key={m.id}
+                      style={m.role === "assistant" ? bubbleAgentLineStyle : bubbleVisitorLineStyle}
+                    >
+                      {linkify(displayText(m.text), bubbleLinkStyle)}
+                    </p>
+                  ))
+                ) : (
+                  <p style={bubbleAgentLineStyle}>
+                    {status === "connecting" ? "Connecting…" : greetingLabel}
+                  </p>
+                )}
+              </div>
             </div>
           ) : null}
 
@@ -588,7 +622,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                 key={m.id}
                 style={m.role === "assistant" ? agentLineStyle : visitorLineStyle}
               >
-                {displayText(m.text)}
+                {linkify(displayText(m.text), transcriptLinkStyle)}
               </p>
             ))}
           </div>
@@ -651,11 +685,26 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         <div style={bottomScrimStyle}>
           {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
 
-          {/* The last line, for when there is no room for the column beside
-              the card (a phone). Without either, a visitor who cannot hear
-              has no way to follow the conversation at all. */}
-          {isConnected && !showTranscript && (lastLine || transcript) ? (
-            <p style={transcriptStyle}>{lastLine || transcript}</p>
+          {/* The conversation, for when there is no room for the column
+              beside the card (a phone). Without either, a visitor who cannot
+              hear has no way to follow it at all -- and it scrolls, so an
+              earlier answer (a link, say) is not gone the moment the next
+              one starts. */}
+          {isConnected && !showTranscript && (messages.length || transcript) ? (
+            <div ref={captionRef} style={captionLogStyle}>
+              {messages.length ? (
+                messages.map((m) => (
+                  <p
+                    key={m.id}
+                    style={m.role === "assistant" ? captionAgentLineStyle : captionVisitorLineStyle}
+                  >
+                    {linkify(displayText(m.text), captionLinkStyle)}
+                  </p>
+                ))
+              ) : (
+                <p style={captionAgentLineStyle}>{transcript}</p>
+              )}
+            </div>
           ) : null}
 
           {audioBlocked ? (
@@ -792,14 +841,46 @@ const bubbleStyle: React.CSSProperties = {
   boxShadow: "0 18px 40px rgba(0,0,0,0.28)",
 };
 
+// The whole conversation, not just the newest reply: it scrolls rather than
+// growing the bubble off the page, and never sideways -- a long address has
+// to wrap, or it is what produces a horizontal scrollbar.
 const bubbleTextStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 10,
+  maxHeight: 220,
+  overflowX: "hidden",
+  overflowY: "auto",
+  overflowWrap: "anywhere",
+};
+
+const bubbleAgentLineStyle: React.CSSProperties = {
   margin: 0,
   color: "#f5f6f7",
   fontSize: 15,
   lineHeight: 1.45,
-  // Long answers scroll rather than growing the bubble off the page.
-  maxHeight: 132,
-  overflowY: "auto",
+};
+
+const bubbleVisitorLineStyle: React.CSSProperties = {
+  margin: 0,
+  color: "rgba(245,246,247,0.62)",
+  fontSize: 13,
+  lineHeight: 1.45,
+  maxWidth: "88%",
+  alignSelf: "flex-end",
+  textAlign: "right",
+};
+
+const bubbleLinkStyle: React.CSSProperties = {
+  color: "#93c5fd",
+  textDecoration: "underline",
+  textUnderlineOffset: 2,
+};
+
+const transcriptLinkStyle: React.CSSProperties = {
+  color: "#2563eb",
+  textDecoration: "underline",
+  textUnderlineOffset: 2,
 };
 
 const controlBarStyle: React.CSSProperties = {
@@ -1074,15 +1155,39 @@ const roundButtonStyle: React.CSSProperties = {
   boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
 };
 
-const transcriptStyle: React.CSSProperties = {
+// The narrow-panel caption: every line, scrollable. The scrim around it is
+// pointer-transparent so the video underneath stays clickable, which means
+// the scroller itself has to opt back in or it could not be scrolled.
+const captionLogStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  width: "calc(100% - 32px)",
+  maxHeight: 96,
+  overflowX: "hidden",
+  overflowY: "auto",
+  overflowWrap: "anywhere",
+  pointerEvents: "auto",
+  textShadow: "0 1px 6px rgba(0,0,0,0.65)",
+};
+
+const captionAgentLineStyle: React.CSSProperties = {
+  margin: 0,
   fontSize: 12,
   lineHeight: 1.4,
   color: "#f3f4f6",
   textAlign: "center",
-  margin: "0 16px",
-  maxHeight: 34,
-  overflow: "hidden",
-  textShadow: "0 1px 6px rgba(0,0,0,0.65)",
+};
+
+const captionVisitorLineStyle: React.CSSProperties = {
+  ...captionAgentLineStyle,
+  color: "rgba(243,244,246,0.62)",
+};
+
+const captionLinkStyle: React.CSSProperties = {
+  color: "#93c5fd",
+  textDecoration: "underline",
+  textUnderlineOffset: 2,
 };
 
 const errorStyle: React.CSSProperties = {
