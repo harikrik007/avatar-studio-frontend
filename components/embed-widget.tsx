@@ -548,7 +548,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               </button>
             ) : null}
 
-            <span style={barDividerStyle} />
+            {/* Only when something follows it: on a live call with the extra
+                controls folded away there is nothing to divide from. */}
+            {!isConnected || controlsExpanded || audioBlocked ? <span style={barDividerStyle} /> : null}
 
             {isConnected && controlsExpanded ? (
               <>
@@ -597,12 +599,17 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               </button>
             ) : null}
 
-            <button type="button" aria-label="Close" style={barButtonStyle}
-              onClick={() => { void endSession("visitor_closed"); askHost("close"); }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 5l14 14M19 5L5 19" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </button>
+            {/* Not during a call: closing here would drop it without the
+                visitor having chosen to hang up. The call button is the way
+                out while connected, and close comes back once it ends. */}
+            {!isConnected ? (
+              <button type="button" aria-label="Close" style={barButtonStyle}
+                onClick={() => { void endSession("visitor_closed"); askHost("close"); }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 5l14 14M19 5L5 19" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            ) : null}
           </div>
           )}
 
@@ -823,7 +830,13 @@ const framelessLeftStyle: React.CSSProperties = {
   position: "absolute",
   left: 0,
   bottom: 0,
-  width: "62%",
+  // Whatever the avatar leaves free, not a fixed share. Her box is pinned to
+  // 2:3 at the full height of the shell (see framelessCanvasStyle), so it is
+  // always 66.667vh wide -- a flat 62% ran well past the free space on a
+  // 760x620 frame and put the chat on top of her. Still capped at 62% for a
+  // wide, short frame, and floored so a very narrow one keeps a usable column
+  // even though it can no longer avoid her entirely.
+  width: "min(62%, max(200px, calc(100% - 66.667vh - 8px)))",
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",
