@@ -564,3 +564,16 @@ a {
     font-size: 24px;
   }
 }
+
+/* The embed's chat scrollers stay scrollable (wheel, touch, keyboard) but
+   draw no bar -- on a small floating bubble it reads as a browser widget
+   stuck onto the design. The three forms cover Firefox and current Chromium,
+   legacy Edge, and Safari/older Chromium respectively. */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}

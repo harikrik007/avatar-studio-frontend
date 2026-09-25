@@ -433,7 +433,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         <div style={framelessLeftStyle}>
           {messages.length || !isConnected ? (
             <div style={bubbleStyle}>
-              <div ref={bubbleTextRef} style={bubbleTextStyle}>
+              <div ref={bubbleTextRef} className="hide-scrollbar" style={bubbleTextStyle}>
                 {messages.length ? (
                   messages.map((m) => (
                     <p
@@ -691,7 +691,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               earlier answer (a link, say) is not gone the moment the next
               one starts. */}
           {isConnected && !showTranscript && (messages.length || transcript) ? (
-            <div ref={captionRef} style={captionLogStyle}>
+            <div ref={captionRef} className="hide-scrollbar" style={captionLogStyle}>
               {messages.length ? (
                 messages.map((m) => (
                   <p
