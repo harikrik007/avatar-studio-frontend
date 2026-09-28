@@ -12,7 +12,7 @@ export default function PricingPage() {
         </Link>
         <div className="l-nav-links">
           <Link href="/pricing">Pricing</Link>
-          <Link href="/dashboard" className="l-btn l-btn-primary">
+          <Link href="/dashboardv2" className="l-btn l-btn-primary">
             Get started
           </Link>
         </div>

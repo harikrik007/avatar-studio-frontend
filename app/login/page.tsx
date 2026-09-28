@@ -8,7 +8,7 @@ import { inter, jetbrainsMono, spaceGrotesk } from "../landing-fonts";
 
 function LoginCard() {
   const params = useSearchParams();
-  const next = params.get("next") || "/dashboard";
+  const next = params.get("next") || "/dashboardv2";
 
   return (
     <main className={`landing ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>

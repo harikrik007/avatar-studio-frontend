@@ -87,7 +87,7 @@ export default function LandingPage() {
         <div className="l-nav-links">
           <a href="#try-avatars">Try live avatar</a>
           <Link href="/pricing">Pricing</Link>
-          <Link href="/dashboard" className="l-btn l-btn-primary">
+          <Link href="/dashboardv2" className="l-btn l-btn-primary">
             Get started
           </Link>
         </div>

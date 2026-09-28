@@ -21,7 +21,7 @@ export const PRICING_TIERS: PricingTier[] = [
       "Max 1 concurrent session",
       "Preview watermark included",
     ],
-    cta: { label: "Get started", href: "/dashboard" },
+    cta: { label: "Get started", href: "/dashboardv2" },
   },
   {
     name: "Starter",
@@ -33,7 +33,7 @@ export const PRICING_TIERS: PricingTier[] = [
       "Max 5 minutes / session",
       "Max 5 concurrent sessions",
     ],
-    cta: { label: "Get started", href: "/dashboard" },
+    cta: { label: "Get started", href: "/dashboardv2" },
   },
   {
     name: "Essential",
@@ -46,7 +46,7 @@ export const PRICING_TIERS: PricingTier[] = [
       "Max 20 concurrent sessions",
       "Watermark removed",
     ],
-    cta: { label: "Get started", href: "/dashboard" },
+    cta: { label: "Get started", href: "/dashboardv2" },
   },
   {
     name: "Business",
@@ -59,7 +59,7 @@ export const PRICING_TIERS: PricingTier[] = [
       "Max 60 minutes / session",
       "40 concurrent sessions included",
     ],
-    cta: { label: "Get started", href: "/dashboard" },
+    cta: { label: "Get started", href: "/dashboardv2" },
     featured: true,
   },
   {

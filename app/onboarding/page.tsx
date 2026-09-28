@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import "../landing.css";
 import { inter, jetbrainsMono, spaceGrotesk } from "../landing-fonts";
 
+// Same-site paths only: an absolute, protocol-relative ("//x") or "/\x"
+// `next` would turn this into an open redirect.
+function safeNext(next: string | null): string {
+  return next && /^\/(?![/\\])/.test(next) ? next : "/dashboardv2";
+}
+
 export default function OnboardingPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
@@ -32,7 +38,7 @@ export default function OnboardingPage() {
     }
 
     await update({ companyName: companyName.trim() });
-    router.replace("/dashboard");
+    router.replace(safeNext(new URLSearchParams(window.location.search).get("next")));
   }
 
   if (status === "loading") return null;

@@ -110,6 +110,8 @@ export async function middleware(request: NextRequest) {
   if (!session.companyName && !ONBOARDING_PATHS.has(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/onboarding";
+    // Onboarding sends them on to where they were headed, not a fixed page.
+    if (!pathname.startsWith("/api/")) url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
 
