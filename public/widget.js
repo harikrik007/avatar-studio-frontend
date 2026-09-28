@@ -65,6 +65,11 @@
   var isTop = position.indexOf("top") !== -1;
   var edgeStyle = isRight ? "right:20px;" : "left:20px;";
   var vEdgeStyle = isTop ? "top:20px;" : "bottom:20px;";
+  // A frameless avatar stands on the page's own edges instead, closed and
+  // open alike: flush to the side it is anchored to, and to the bottom when
+  // bottom-anchored.
+  var framelessEdgeStyle = isRight ? "right:0;" : "left:0;";
+  var framelessVEdgeStyle = isTop ? "top:20px;" : "bottom:0;";
   // The avatar's own still, fetched below. Until it arrives (or if it never
   // does) the bubble is the plain icon it has always been -- the widget has
   // to be usable on a slow network and on a key with no avatar preview.
@@ -81,6 +86,10 @@
   // page, roughly 40% of a typical viewport's height, not an icon-sized
   // hint of one.
   var CLOSED_FRAMELESS_H = 280;
+  // The keyed cutout is cropped to her silhouette (see keyGreenScreenStill),
+  // so it is shown at this fraction of CLOSED_FRAMELESS_H to keep her the
+  // same size she was inside the full square still.
+  var closedImgScale = 1;
 
   // Ports the same green-key math the open panel's WebGL shader uses
   // (components/green-screen-canvas.tsx) to a plain 2-D canvas. A
@@ -98,6 +107,8 @@
       ctx.drawImage(img, 0, 0);
       var frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
       var px = frame.data;
+      var w = canvas.width, h = canvas.height;
+      var minX = w, maxX = -1, minY = h;
       for (var i = 0; i < px.length; i += 4) {
         var r = px[i], g = px[i + 1], b = px[i + 2];
         var maxC = Math.max(r, g, b);
@@ -113,9 +124,28 @@
         } else if (greenDominance > 8 && g > 70) {
           px[i + 1] = Math.max(0, g - greenDominance * SPILL);
         }
+        if (px[i + 3] > 32) {
+          var p = i / 4, x = p % w, y = (p - x) / w;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+        }
       }
       ctx.putImageData(frame, 0, 0);
-      done(canvas.toDataURL("image/png"));
+      if (maxX < 0) {
+        done(canvas.toDataURL("image/png"), 1);
+        return;
+      }
+      // Crop to her silhouette: the still is square with keyed-out margins
+      // that otherwise hold her off the page edges she stands on, and push
+      // the label above her head well clear of it. The bottom stays the
+      // still's own -- that is where her torso is cut.
+      var cropW = maxX - minX + 1, cropH = h - minY;
+      var out = document.createElement("canvas");
+      out.width = cropW;
+      out.height = cropH;
+      out.getContext("2d").drawImage(canvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+      done(out.toDataURL("image/png"), cropH / h);
     } catch (e) {
       // A tainted canvas (the still served without CORS) throws on
       // getImageData -- fall back to the original, unkeyed still rather
@@ -159,19 +189,23 @@
       // standing directly on the host page, the same composition the open
       // panel uses at full size, just smaller -- a preview of who is about
       // to talk, not the conversation itself.
+      // The label sits above her head so nothing comes between her and the
+      // page's bottom edge; hover growth is anchored to that corner so she
+      // doesn't lift off the edges.
       bubble.style.cssText =
-        "position:fixed;" + edgeStyle + vEdgeStyle +
+        "position:fixed;" + framelessEdgeStyle + framelessVEdgeStyle +
         "border:none;background:transparent;padding:0;box-shadow:none;" +
         "cursor:pointer;z-index:2147483000;flex-direction:column;display:" + showing + ";" +
         "align-items:center;justify-content:center;gap:8px;transition:transform 0.15s ease;" +
+        "transform-origin:" + (isTop ? "top " : "bottom ") + (isRight ? "right" : "left") + ";" +
         "font:600 12px/1 system-ui,-apple-system,'Segoe UI',sans-serif;";
       bubble.innerHTML =
-        '<img src="' + escapeHtml(transparentAvatarUrl) + '" alt="" ' +
-        'style="height:' + CLOSED_FRAMELESS_H + 'px;width:auto;display:block;' +
-        'filter:drop-shadow(0 10px 22px rgba(0,0,0,0.35));">' +
         '<span style="background:#fff;color:#111;border-radius:999px;padding:5px 12px;' +
         'box-shadow:0 4px 14px rgba(0,0,0,0.18);white-space:nowrap;">' +
-        escapeHtml(label) + "</span>";
+        escapeHtml(label) + "</span>" +
+        '<img src="' + escapeHtml(transparentAvatarUrl) + '" alt="" ' +
+        'style="height:' + Math.round(CLOSED_FRAMELESS_H * closedImgScale) + 'px;width:auto;display:block;' +
+        'filter:drop-shadow(0 10px 22px rgba(0,0,0,0.35));">';
       return;
     }
 
@@ -226,7 +260,7 @@
 
     panelWrap = document.createElement("div");
     panelWrap.style.cssText =
-      "position:fixed;" + edgeStyle +
+      "position:fixed;" + (frameless ? framelessEdgeStyle : edgeStyle) +
       (isTop ? "top:" : "bottom:") + panelOffset() + "px;" +
       "width:" + (frameless ? FRAMELESS_W : PANEL_W) + "px;" +
       "height:" + (frameless ? FRAMELESS_H : PANEL_H) + "px;" +
@@ -318,6 +352,7 @@
             panelWrap.style.overflow = "visible";
             panelWrap.style.width = FRAMELESS_W + "px";
             panelWrap.style.height = FRAMELESS_H + "px";
+            panelWrap.style[isRight ? "right" : "left"] = "0px";
             panelWrap.style[isTop ? "top" : "bottom"] = panelOffset() + "px";
             if (frame) frame.style.background = "transparent";
           }
@@ -332,12 +367,13 @@
           var srcImg = new Image();
           srcImg.crossOrigin = "anonymous"; // untainted canvas needs this
           srcImg.onload = function () {
-            keyGreenScreenStill(srcImg, function (keyedUrl) {
+            keyGreenScreenStill(srcImg, function (keyedUrl, heightFraction) {
               // A still that turned out not to be green-screened at all
               // (ticked transparent by mistake) keys to a no-op -- falling
               // back to the raw still here at least keeps a real photo on
               // screen rather than nothing.
               transparentAvatarUrl = keyedUrl || config.preview_image_url;
+              closedImgScale = keyedUrl ? heightFraction : 1;
               renderBubble();
               if (panelWrap) {
                 panelWrap.style[isTop ? "top" : "bottom"] = panelOffset() + "px";
