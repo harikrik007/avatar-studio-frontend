@@ -155,6 +155,11 @@ type Agent = {
 
 const DOC_EXTENSIONS = ".pdf,.txt,.md,.csv,.docx";
 
+// Avatars offered in this dashboard: Anam's hosted faces plus the engines we
+// host ourselves on the GPU box (ditto-avatar-pipeline,
+// flashhead-avatar-pipeline) -- none has anything for a client to create.
+const HOSTED_PROVIDERS = new Set(["anam", "ditto", "flashhead"]);
+
 function newTool(type: ToolType = "http_request"): ToolConfig {
   const preset = CONNECTOR_PRESETS[type];
   return {
@@ -301,11 +306,10 @@ export default function AgentsPage() {
 
   // The hosted catalogue: shared by every client, always ready, nothing to
   // create. A client's own Wav2Lip avatars are deliberately not offered
-  // here -- this dashboard is the Anam product, plus ditto (also hosted,
-  // also nothing for a client to upload/create -- see
-  // ditto-avatar-pipeline/serving/).
+  // here -- this dashboard is the Anam product, plus the self-hosted
+  // engines (see HOSTED_PROVIDERS).
   const readyAvatars = avatars.filter(
-    (a) => (a.provider === "anam" || a.provider === "ditto") && a.status === "ready");
+    (a) => HOSTED_PROVIDERS.has(a.provider ?? "") && a.status === "ready");
 
   return (
     <div className="l-dash-shell">
@@ -1579,7 +1583,7 @@ function AgentDialog({
 
   const avatar = agent ? avatars.find((a) => a.id === (avatarId || agent.avatar_id)) : null;
   const pickable = avatars.filter(
-    (a) => (a.provider === "anam" || a.provider === "ditto") && a.status === "ready");
+    (a) => HOSTED_PROVIDERS.has(a.provider ?? "") && a.status === "ready");
 
   async function save(patch: Partial<{ avatar_id: string; transparent: boolean; name: string; opening_intro: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
     if (!agent) return;
