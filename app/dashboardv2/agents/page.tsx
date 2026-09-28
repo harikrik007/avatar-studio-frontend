@@ -841,6 +841,9 @@ function AvatarPicker({
               cursor: "pointer",
               borderRadius: 12,
               background: "transparent",
+              // Buttons don't inherit text colour; without this the names
+              // render in the browser's default black on the dark dialog.
+              color: "var(--l-fg)",
               // Selection has to survive without colour alone, hence the
               // ring plus the checked state above for assistive tech.
               border: selected ? "2px solid var(--l-fg)" : "1px solid var(--l-border)",
