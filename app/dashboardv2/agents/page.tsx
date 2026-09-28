@@ -301,8 +301,11 @@ export default function AgentsPage() {
 
   // The hosted catalogue: shared by every client, always ready, nothing to
   // create. A client's own Wav2Lip avatars are deliberately not offered
-  // here -- this dashboard is the Anam product.
-  const readyAvatars = avatars.filter((a) => a.provider === "anam" && a.status === "ready");
+  // here -- this dashboard is the Anam product, plus ditto (also hosted,
+  // also nothing for a client to upload/create -- see
+  // ditto-avatar-pipeline/serving/).
+  const readyAvatars = avatars.filter(
+    (a) => (a.provider === "anam" || a.provider === "ditto") && a.status === "ready");
 
   return (
     <div className="l-dash-shell">
@@ -1572,7 +1575,8 @@ function AgentDialog({
   }, [agent]);
 
   const avatar = agent ? avatars.find((a) => a.id === (avatarId || agent.avatar_id)) : null;
-  const pickable = avatars.filter((a) => a.provider === "anam" && a.status === "ready");
+  const pickable = avatars.filter(
+    (a) => (a.provider === "anam" || a.provider === "ditto") && a.status === "ready");
 
   async function save(patch: Partial<{ avatar_id: string; transparent: boolean; name: string; opening_intro: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
     if (!agent) return;
