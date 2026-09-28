@@ -193,10 +193,11 @@
   // 60px circle vs. 64px face + gap + caption: the panel has to clear
   // whichever is mounted, or it sits on top of the bubble. Only matters
   // for the panel widget -- the frameless one hides the bubble the moment
-  // it opens, so it has nothing to clear and sits at the same small
-  // margin the bubble itself uses.
+  // it opens, so it has nothing to clear. Anchored at the bottom she stands
+  // on the page's bottom edge (the frame's bottom is where her torso is cut
+  // off), so no margin there.
   function panelOffset() {
-    if (frameless) return 20;
+    if (frameless) return isTop ? 20 : 0;
     return avatarUrl ? 124 : 88;
   }
 
