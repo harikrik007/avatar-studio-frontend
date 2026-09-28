@@ -214,8 +214,11 @@
   var PANEL_H = 560;
   var PANEL_W_BIG = 420;
   var PANEL_H_BIG = 680;
-  var FRAMELESS_W = 760;
-  var FRAMELESS_H = 620;
+  // Half the height it launched at (620): the avatar fills the frame's
+  // height, so this is what sets her size on the host page. Width is her
+  // 2:3 box (~207px) plus the chat column beside her at its old width.
+  var FRAMELESS_W = 560;
+  var FRAMELESS_H = 310;
 
   function ensureFrame() {
     if (frame) return;

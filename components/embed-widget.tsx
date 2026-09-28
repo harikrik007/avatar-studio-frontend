@@ -100,6 +100,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   // audioBlocked (the browser refusing autoplay, which needs a retry, not
   // a toggle) and independent of micOn (their own mic, not hers).
   const [speakerMuted, setSpeakerMuted] = useState(false);
+  // Frameless only: on a phone the chat column has nowhere to go but over
+  // her face, so the visitor can put it away.
+  const [chatHidden, setChatHidden] = useState(false);
   const messageSeqRef = useRef(0);
   const logRef = useRef<HTMLDivElement | null>(null);
   const bubbleTextRef = useRef<HTMLDivElement | null>(null);
@@ -174,7 +177,8 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     for (const el of [bubbleTextRef.current, captionRef.current]) {
       if (el) el.scrollTop = el.scrollHeight;
     }
-  }, [messages]);
+    // chatHidden: re-showing the bubble mounts a fresh scroller at the top.
+  }, [messages, chatHidden]);
 
   function appendTranscript(role: "assistant" | "user", text: string) {
     if (!text) return;
@@ -431,7 +435,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         </div>
 
         <div style={framelessLeftStyle}>
-          {messages.length || !isConnected ? (
+          {!chatHidden && (messages.length || !isConnected) ? (
             <div style={bubbleStyle}>
               <div ref={bubbleTextRef} className="hide-scrollbar" style={bubbleTextStyle}>
                 {messages.length ? (
@@ -530,6 +534,22 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                   d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.58 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"
                   fill="#fff"
                 />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              aria-label={chatHidden ? "Show chat" : "Hide chat"}
+              aria-pressed={chatHidden}
+              title={chatHidden ? "Show chat" : "Hide chat"}
+              onClick={() => setChatHidden((v) => !v)}
+              style={barButtonStyle}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 5h16v11H8.5L4 20V5z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+                {chatHidden ? (
+                  <path d="M3 3l18 18" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                ) : null}
               </svg>
             </button>
 
@@ -861,7 +881,8 @@ const bubbleTextStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 10,
-  maxHeight: 220,
+  // Bubble + control bar have to fit the 310px frameless frame (widget.js).
+  maxHeight: 170,
   overflowX: "hidden",
   overflowY: "auto",
   overflowWrap: "anywhere",
