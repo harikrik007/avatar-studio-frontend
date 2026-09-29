@@ -300,8 +300,19 @@
 
   function setOpen(next) {
     open = next;
-    ensureFrame();
-    panelWrap.style.display = open ? "block" : "none";
+    if (open) {
+      ensureFrame();
+      panelWrap.style.display = "block";
+    } else if (panelWrap) {
+      // Hiding the existing iframe preserves its React state, transcript,
+      // and auto-connect guard. Remove it instead so the next launcher click
+      // creates a clean iframe, clears the previous chat, and auto-connects
+      // as a brand-new conversation.
+      panelWrap.remove();
+      panelWrap = null;
+      frame = null;
+      expanded = false;
+    }
     bubble.setAttribute("aria-label", "Open chat");
     renderBubble();
   }
