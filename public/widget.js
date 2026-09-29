@@ -189,9 +189,9 @@
       // standing directly on the host page, the same composition the open
       // panel uses at full size, just smaller -- a preview of who is about
       // to talk, not the conversation itself.
-      // The label sits above her head so nothing comes between her and the
-      // page's bottom edge; hover growth is anchored to that corner so she
-      // doesn't lift off the edges.
+      // Keep the invitation on the avatar instead of adding height above or
+      // below her. It sits slightly above the lower edge where it stays easy
+      // to read without covering the face.
       bubble.style.cssText =
         "position:fixed;" + framelessEdgeStyle + framelessVEdgeStyle +
         "border:none;background:transparent;padding:0;box-shadow:none;" +
@@ -200,12 +200,13 @@
         "transform-origin:" + (isTop ? "top " : "bottom ") + (isRight ? "right" : "left") + ";" +
         "font:600 12px/1 system-ui,-apple-system,'Segoe UI',sans-serif;";
       bubble.innerHTML =
-        '<span style="background:#fff;color:#111;border-radius:999px;padding:5px 12px;' +
-        'box-shadow:0 4px 14px rgba(0,0,0,0.18);white-space:nowrap;">' +
-        escapeHtml(label) + "</span>" +
         '<img src="' + escapeHtml(transparentAvatarUrl) + '" alt="" ' +
         'style="height:' + Math.round(CLOSED_FRAMELESS_H * closedImgScale) + 'px;width:auto;display:block;' +
-        'filter:drop-shadow(0 10px 22px rgba(0,0,0,0.35));">';
+        'filter:drop-shadow(0 10px 22px rgba(0,0,0,0.35));">' +
+        '<span style="position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:2;' +
+        'background:#fff;color:#111;border-radius:999px;padding:5px 12px;' +
+        'box-shadow:0 4px 14px rgba(0,0,0,0.18);white-space:nowrap;">' +
+        escapeHtml(label) + "</span>";
       return;
     }
 
