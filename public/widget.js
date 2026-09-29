@@ -276,7 +276,10 @@
           "border:1px solid rgba(0,0,0,0.08);background:#ffffff;");
 
     frame = document.createElement("iframe");
-    frame.src = studioOrigin + "/embed/" + encodeURIComponent(publicKey);
+    // This iframe only exists after the visitor clicks the small avatar.
+    // Mark that route load so the embedded React widget can start the call
+    // immediately instead of asking for a second click on its call button.
+    frame.src = studioOrigin + "/embed/" + encodeURIComponent(publicKey) + "?autoConnect=1";
     // Mic capture inside a cross-origin iframe needs an explicit
     // Permissions Policy delegation -- this is that grant. It only works
     // if the host page itself is HTTPS and its own Permissions-Policy (if

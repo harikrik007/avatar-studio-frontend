@@ -113,6 +113,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   const roomNameRef = useRef<string | null>(null);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoConnectStartedRef = useRef(false);
   // sessionStorage guard: one session per browser tab-group, so a single
   // visitor can't hold several of a small, shared concurrency pool open
   // across multiple tabs of the same widget.
@@ -388,6 +389,20 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       setErrorMessage(error instanceof Error ? error.message : "Unable to start the conversation.");
     }
   }
+
+  // widget.js creates this iframe lazily when the visitor clicks the small
+  // avatar and adds autoConnect=1 to that route. Once the availability check
+  // has completed, treat that original launcher click as the call action too.
+  // A directly opened /embed/[key] page has no flag and keeps its Start button.
+  useEffect(() => {
+    if (status !== "idle" || autoConnectStartedRef.current) return;
+    if (new URLSearchParams(window.location.search).get("autoConnect") !== "1") return;
+
+    autoConnectStartedRef.current = true;
+    void connect();
+    // connect intentionally uses the latest render state; status is the gate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const isConnected = status === "listening";
   const busy = status === "connecting" || status === "checking";
