@@ -254,7 +254,7 @@
   // height, so this is what sets her size on the host page. Width is her
   // 2:3 box (~207px) plus the chat column beside her at its old width.
   var FRAMELESS_W = 560;
-  var FRAMELESS_H = 310;
+  var FRAMELESS_H = 350;
 
   function ensureFrame() {
     if (frame) return;
