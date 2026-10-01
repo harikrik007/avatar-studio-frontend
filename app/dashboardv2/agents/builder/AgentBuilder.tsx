@@ -19,7 +19,7 @@ import { voiceById } from "@/lib/voices";
 import { Spinner } from "../../ui";
 import { LiveTestPanel } from "../shared";
 import { useAgentForm, type AgentForm } from "../useAgentForm";
-import { AdvancedTab, AvatarTab, EmbedTab, PromptTab, ToolsTab, VoiceTab } from "./tabs";
+import { AdvancedTab, AvatarTab, Chevron, EmbedTab, PromptTab, ToolsTab, VoiceTab } from "./tabs";
 
 type TabId = "prompt" | "avatar" | "voice" | "tools" | "embed" | "advanced";
 const CORE_TABS: { id: TabId; label: string }[] = [
@@ -163,7 +163,7 @@ export default function AgentBuilder({ agentId }: { agentId?: string }) {
       <header className="lb-top">
         <div className="lb-top-left">
           <Link href="/dashboardv2/agents" className="lb-back" aria-label="Back to agents" onClick={(e) => confirmLeave(e)}>
-            ‹
+            <Chevron dir="left" size={16} />
           </Link>
           <span className="lb-crumb">
             <span className="lb-crumb-root">Agents</span>
@@ -313,7 +313,18 @@ function BuilderTabs({
 }) {
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const focusActive = useRef(false);
   const all = [...tabs, ...more];
+
+  // Arrow keys move focus with the selection. Done once the new tab is the
+  // active one, not straight after the key press: Embed/Advanced only exist as
+  // tab buttons while active, so there was nothing to focus yet and the ring
+  // stayed behind on Tools.
+  useEffect(() => {
+    if (!focusActive.current) return;
+    focusActive.current = false;
+    document.getElementById(`lb-tab-${active}`)?.focus();
+  }, [active]);
 
   useEffect(() => {
     if (!menu) return;
@@ -333,8 +344,8 @@ function BuilderTabs({
     else if (e.key === "End") next = all.length - 1;
     if (next >= 0) {
       e.preventDefault();
+      focusActive.current = all[next].id !== active;
       onChange(all[next].id);
-      setTimeout(() => document.getElementById(`lb-tab-${all[next].id}`)?.focus(), 0);
     }
   }
 
@@ -371,7 +382,7 @@ function BuilderTabs({
       {more.length > 0 ? (
         <div className="lb-menu" ref={menuRef}>
           <button type="button" className="lb-more" aria-haspopup="menu" aria-expanded={menu} aria-label="More tabs" onClick={() => setMenu((v) => !v)}>
-            ⌄
+            <Chevron dir="down" />
           </button>
           {menu ? (
             <div className="lb-menu-pop lb-menu-right" role="menu">

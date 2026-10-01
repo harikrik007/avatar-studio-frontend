@@ -558,7 +558,7 @@ export function LiveTestPanel({
             : state === "warming"
               ? error || "Warming up…"
               : state === "error"
-                ? error || "Error"
+                ? "Not connected" // the reason is in the overlay above; it used to be printed twice
                 : "Connecting…"}
         </span>
         <button type="button" className={stopClassName} onClick={handleStopClick}>

@@ -71,8 +71,6 @@
   border-radius: var(--radius-sm);
   color: var(--fg-muted);
   text-decoration: none;
-  font-size: 20px;
-  line-height: 1;
 }
 
 .landing .lb-back:hover {
@@ -241,6 +239,12 @@
   color: var(--fg);
 }
 
+/* the strip clips (it scrolls sideways), so the ring has to sit inside the tab */
+.landing .lb .lb-tab:focus-visible {
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
 .landing .lb-tab-active {
   color: var(--fg);
   border-bottom-color: var(--accent);
@@ -275,8 +279,10 @@
   background: transparent;
   color: var(--fg-muted);
   cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 
 .landing .lb-more:hover {
@@ -795,8 +801,9 @@
 }
 
 .landing .lb-chev {
+  display: inline-flex;
+  flex-shrink: 0;
   color: var(--fg-subtle);
-  font-size: 12px;
 }
 
 .landing .lb-tool-form {
@@ -958,6 +965,9 @@
 .landing .lb-preview-live {
   aspect-ratio: auto;
   height: auto;
+  /* the session's video is opaque, so the transparency checkerboard would
+     only show through the status bar under it */
+  background: var(--surface-2);
 }
 
 .landing .lb-preview .l-live-test {
@@ -1056,6 +1066,14 @@
 }
 
 /* --- responsive --- */
+
+/* side-by-side but narrow (1024-1279): four chips across cut "Cabin Crew" to
+   "Cab…", so they go two by two */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .landing .lb-chips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 
 @media (max-width: 1023px) {
   .landing .lb {

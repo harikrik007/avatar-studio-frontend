@@ -55,6 +55,18 @@ export function SectionCard({
   );
 }
 
+// Same stroke as the dashboard's RowChevron; the text glyphs (⌄ ▾ ‹) fall back
+// to whatever font has them and came out a different size on every machine.
+const CHEVRON_PATHS = { down: "m3.5 6 4.5 5 4.5-5", up: "m3.5 10 4.5-5 4.5 5", left: "m10 3.5-5 4.5 5 4.5" };
+
+export function Chevron({ dir, size = 14 }: { dir: keyof typeof CHEVRON_PATHS; size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <path d={CHEVRON_PATHS[dir]} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function Switch({
   checked,
   onChange,
@@ -603,8 +615,8 @@ export function ToolsTab({ f }: { f: AgentForm }) {
                         <span className="lb-tool-name">{tool.name || "(unnamed tool)"}</span>
                         <span className="lb-tool-desc">{tool.description || CONNECTOR_PRESETS[tool.type].label}</span>
                       </span>
-                      <span className="lb-chev" aria-hidden="true">
-                        {expanded ? "▴" : "▾"}
+                      <span className="lb-chev">
+                        <Chevron dir={expanded ? "up" : "down"} />
                       </span>
                     </button>
                     <button type="button" className="l-btn-delete" onClick={() => removeTool(tool.id)}>
