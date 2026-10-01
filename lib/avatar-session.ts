@@ -33,8 +33,18 @@ export type AvatarToolCall = {
   args?: Record<string, unknown>;
 };
 
+// A client tool (AGENT_TOOLS_CLIENT_SERVER.md §4.4): runs in the host page,
+// not on our servers. Answered with sendClientToolResult().
+export type ClientToolCall = {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  awaitResult: boolean;
+};
+
 export type AvatarSessionCallbacks = {
   onToolCall: (calls: AvatarToolCall[]) => void;
+  onClientToolCall?: (call: ClientToolCall) => void;
   onTranscript: (role: "assistant" | "user", text: string) => void;
   onSpeakingChange: (speaking: boolean) => void;
   onTrack: (track: RemoteTrack) => void;
@@ -140,6 +150,14 @@ export class AvatarSession {
           }
         ]);
         break;
+      case "client_tool_call":
+        this.callbacks.onClientToolCall?.({
+          id: String(message.id ?? ""),
+          name: String(message.name ?? ""),
+          args: (message.args ?? {}) as Record<string, unknown>,
+          awaitResult: Boolean(message.awaitResult),
+        });
+        break;
       case "transcript":
         this.callbacks.onTranscript(
           message.role === "user" ? "user" : "assistant",
@@ -197,6 +215,21 @@ export class AvatarSession {
         response: response.response ?? {}
       });
     }
+  }
+
+  /** A client tool's outcome, back to the agent (which hands it to Gemini). */
+  sendClientToolResult(id: string, outcome: { result?: unknown; error?: string }) {
+    let payload: Record<string, unknown>;
+    try {
+      // must survive JSON: a handler returning a DOM node or a function is an error, not a crash
+      payload =
+        outcome.error !== undefined
+          ? { type: "client_tool_result", id, error: String(outcome.error) }
+          : { type: "client_tool_result", id, result: JSON.parse(JSON.stringify(outcome.result ?? null)) };
+    } catch {
+      payload = { type: "client_tool_result", id, error: "The tool handler returned a value that isn't JSON." };
+    }
+    this.publish(payload);
   }
 
   close() {

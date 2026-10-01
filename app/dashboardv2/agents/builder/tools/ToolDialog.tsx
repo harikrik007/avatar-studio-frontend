@@ -13,15 +13,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DATA_TYPES,
   METHODS,
+  WEATHER_EXAMPLE,
   compileRows,
   duplicateIdentifiers,
   duplicateName,
+  emptySchema,
+  inferSchema,
   isMasked,
+  newClientTool,
   newParamRow,
+  newWebhook,
   normalize,
+  parseSchemaText,
+  rowsFromSchema,
   rowsFromWebhook,
   sampleArgs,
+  schemaText,
   validateTool,
+  type ClientTool,
   type CustomTool,
   type HeaderEntry,
   type HttpMethod,
@@ -36,10 +45,15 @@ import { BoltIcon, BracesIcon, DocIcon, InfoIcon, XIcon } from "./icons";
 type Kind = "webhook" | "client" | "knowledge";
 
 const KINDS: { id: Kind; label: string; sub: string; icon: React.ReactNode; soon?: boolean }[] = [
-  { id: "client", label: "Client", sub: "Calls your app", icon: <BracesIcon />, soon: true },
+  { id: "client", label: "Client", sub: "Calls your app", icon: <BracesIcon /> },
   { id: "knowledge", label: "Knowledge", sub: "Searches your content", icon: <DocIcon />, soon: true },
   { id: "webhook", label: "Webhook", sub: "Calls an external endpoint", icon: <BoltIcon /> },
 ];
+
+const PLACEHOLDERS = {
+  client: { name: "get_weather", instructions: "Use this when the user asks for the current weather in a place." },
+  webhook: { name: "send_webhook", instructions: "Use this to call the endpoint when the user asks for that action." },
+};
 
 const HELP: Record<Kind, string> = {
   client: "Client tools run in your app. Use one when the browser or app code handles the action.",
@@ -65,18 +79,37 @@ export default function ToolDialog({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  // deep clone: Cancel must leave the list exactly as it was
-  const [draft, setDraft] = useState<WebhookTool>(() => structuredClone(tool) as WebhookTool);
-  const initialRows = useMemo(() => rowsFromWebhook(tool as WebhookTool), [tool]);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const startedAs: "webhook" | "client" = tool.type === "client" ? "client" : "webhook";
+  const [kind, setKind] = useState<"webhook" | "client">(startedAs);
+  const [name, setName] = useState(tool.name);
+  const [description, setDescription] = useState(tool.description);
+  // Both kinds keep their own half of the draft (deep clones: Cancel must leave
+  // the list exactly as it was), so switching type and back loses nothing.
+  const [hook, setHook] = useState<WebhookTool>(() =>
+    tool.type === "server" ? (structuredClone(tool) as WebhookTool) : { ...newWebhook(), id: tool.id }
+  );
+  const initialRows = useMemo(
+    () => (tool.type === "server" ? rowsFromWebhook(tool as WebhookTool) : { query: [], body: [] }),
+    [tool]
+  );
   const [query, setQuery] = useState<ParamRow[]>(initialRows.query);
   const [body, setBody] = useState<ParamRow[]>(initialRows.body);
+  const [client, setClient] = useState<ClientTool>(() =>
+    tool.type === "client" ? (structuredClone(tool) as ClientTool) : { ...newClientTool(), id: tool.id }
+  );
+  const [schema, setSchema] = useState(() =>
+    schemaText(tool.type === "client" ? { ...tool.parameters, ...(tool.strict ? { strict: true } : {}) } : emptySchema())
+  );
   const [attempted, setAttempted] = useState(false);
-  const hasOptional =
-    draft.headers.length > 0 || query.length > 0 || body.length > 0 || !draft.awaitResponse || Boolean(draft.body_template);
-  const [optionalOpen, setOptionalOpen] = useState(hasOptional);
+  const [optionalOpen, setOptionalOpen] = useState(() =>
+    tool.type === "client"
+      ? Object.keys(tool.parameters?.properties ?? {}).length > 0 || (tool as ClientTool).awaitResult
+      : hook.headers.length > 0 || initialRows.query.length > 0 || initialRows.body.length > 0 ||
+        !hook.awaitResponse || Boolean(hook.body_template)
+  );
   const [testOpen, setTestOpen] = useState(false);
 
-  const nameRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const d = ref.current;
     if (d && !d.open) d.showModal();
@@ -85,7 +118,7 @@ export default function ToolDialog({
     nameRef.current?.focus();
   }, []);
 
-  const set = (patch: Partial<WebhookTool>) => setDraft((d) => ({ ...d, ...patch }));
+  const set = (patch: Partial<WebhookTool>) => setHook((d) => ({ ...d, ...patch }));
 
   function setMethod(method: HttpMethod) {
     // a GET has no body: its body parameters move to the query
@@ -96,18 +129,47 @@ export default function ToolDialog({
     set({ method });
   }
 
-  /** The draft as it would be saved: rows compiled into one schema + param_in. */
-  const built = useMemo(() => {
-    const { parameters, param_in } = compileRows(query, body, draft.method, (tool as WebhookTool).parameters);
-    return normalize({ ...draft, parameters, param_in } as WebhookTool);
-  }, [draft, query, body, tool]);
+  /** Switching type keeps Name, Instructions and the parameters (§2.3). */
+  function switchKind(next: "webhook" | "client") {
+    if (next === kind) return;
+    if (next === "client") {
+      const { parameters } = compileRows(query, body, hook.method, hook.parameters);
+      setSchema(schemaText(parameters));
+    } else {
+      const parsed = parseSchemaText(schema);
+      if (parsed.schema) {
+        const rows = rowsFromSchema(parsed.schema, hook.method);
+        setQuery(rows.query);
+        setBody(rows.body);
+      }
+    }
+    setKind(next);
+  }
+
+  /** The draft as it would be saved. */
+  const { built, schemaError } = useMemo((): { built: CustomTool; schemaError: string | null } => {
+    if (kind === "webhook") {
+      const { parameters, param_in } = compileRows(query, body, hook.method, hook.parameters);
+      return { built: normalize({ ...hook, name, description, parameters, param_in }), schemaError: null };
+    }
+    const parsed = parseSchemaText(schema);
+    // `strict` is written in the schema box (as the helper says) but stored on the tool
+    const { strict, ...parameters } = (parsed.schema ?? emptySchema()) as ClientTool["parameters"] & { strict?: boolean };
+    const out: ClientTool = { ...client, name, description, parameters };
+    if (strict) out.strict = true;
+    else delete out.strict;
+    return { built: normalize(out), schemaError: parsed.error ?? null };
+  }, [kind, hook, query, body, client, schema, name, description]);
 
   const errors = useMemo(() => {
-    const e = validateTool(built, { storedUrl });
+    const e = schemaError ? [schemaError] : [];
+    e.push(...validateTool(built, { storedUrl: kind === "webhook" ? storedUrl : null }));
     if (built.name && duplicateName(allTools, built)) e.push("An agent tool with this name already exists.");
-    for (const id of duplicateIdentifiers([...query, ...body])) e.push(`Parameter ${id} is defined twice.`);
+    if (kind === "webhook") {
+      for (const id of duplicateIdentifiers([...query, ...body])) e.push(`Parameter ${id} is defined twice.`);
+    }
     return [...new Set(e)];
-  }, [built, storedUrl, allTools, query, body]);
+  }, [built, schemaError, storedUrl, allTools, query, body, kind]);
 
   function save() {
     setAttempted(true);
@@ -154,10 +216,11 @@ export default function ToolDialog({
                   key={k.id}
                   type="button"
                   role="radio"
-                  aria-checked={k.id === "webhook"}
+                  aria-checked={k.id === kind}
                   disabled={k.soon}
                   title={k.soon ? "Coming soon" : undefined}
-                  className={`lb-kind${k.id === "webhook" ? " lb-kind-on" : ""}`}
+                  className={`lb-kind${k.id === kind ? " lb-kind-on" : ""}`}
+                  onClick={() => (k.id === "knowledge" ? undefined : switchKind(k.id))}
                 >
                   <span className="lb-kind-icon">{k.icon}</span>
                   <span className="lb-kind-text">
@@ -167,7 +230,7 @@ export default function ToolDialog({
                 </button>
               ))}
             </div>
-            <p className="lb-help">{HELP.webhook}</p>
+            <p className="lb-help">{HELP[kind]}</p>
           </div>
 
           <label className="lb-field">
@@ -177,9 +240,9 @@ export default function ToolDialog({
             <input
               ref={nameRef}
               className="lb-input lb-mono"
-              value={draft.name}
-              placeholder="send_webhook"
-              onChange={(e) => set({ name: e.target.value })}
+              value={name}
+              placeholder={PLACEHOLDERS[kind].name}
+              onChange={(e) => setName(e.target.value)}
             />
           </label>
 
@@ -190,17 +253,29 @@ export default function ToolDialog({
             <textarea
               className="lb-input"
               rows={3}
-              value={draft.description}
-              placeholder="Use this to call the endpoint when the user asks for that action."
-              onChange={(e) => set({ description: e.target.value })}
+              value={description}
+              placeholder={PLACEHOLDERS[kind].instructions}
+              onChange={(e) => setDescription(e.target.value)}
             />
           </label>
 
+          {kind === "client" ? (
+            <ClientFields
+              client={client}
+              onClient={(patch) => setClient((c) => ({ ...c, ...patch }))}
+              schema={schema}
+              onSchema={setSchema}
+              schemaError={schemaError}
+              open={optionalOpen}
+              onOpen={setOptionalOpen}
+            />
+          ) : (
+          <>
           <div className="lb-field">
             <div className="lb-method-url">
               <label className="lb-method">
                 <span className="lb-label">Method</span>
-                <select className="lb-input" value={draft.method} onChange={(e) => setMethod(e.target.value as HttpMethod)}>
+                <select className="lb-input" value={hook.method} onChange={(e) => setMethod(e.target.value as HttpMethod)}>
                   {METHODS.map((m) => (
                     <option key={m}>{m}</option>
                   ))}
@@ -214,7 +289,7 @@ export default function ToolDialog({
                   className="lb-input"
                   type="url"
                   required
-                  value={draft.url}
+                  value={hook.url}
                   placeholder="https://api.example.com/endpoint"
                   onChange={(e) => set({ url: e.target.value })}
                 />
@@ -226,33 +301,33 @@ export default function ToolDialog({
                 {testOpen ? "Hide test" : "Test this tool"}
               </button>
             </div>
-            {testOpen ? <TestPanel tool={built} agentId={agentId} /> : null}
+            {testOpen && built.type === "server" ? <TestPanel tool={built as WebhookTool} agentId={agentId} /> : null}
           </div>
 
           <details className="lb-optional" open={optionalOpen} onToggle={(e) => setOptionalOpen(e.currentTarget.open)}>
             <summary>Optional settings</summary>
 
-            <RowsSection title="Headers" onAdd={() => set({ headers: [...draft.headers, { name: "", value: "", secret: true }] })}>
-              <HeaderRows headers={draft.headers} onChange={(headers) => set({ headers })} />
+            <RowsSection title="Headers" onAdd={() => set({ headers: [...hook.headers, { name: "", value: "", secret: true }] })}>
+              <HeaderRows headers={hook.headers} onChange={(headers) => set({ headers })} />
             </RowsSection>
 
             <RowsSection title="Query" sub="Sent in the URL." onAdd={() => setQuery([...query, newParamRow()])}>
               <ParamRows rows={query} onChange={setQuery} />
             </RowsSection>
 
-            {draft.method !== "GET" ? (
+            {hook.method !== "GET" ? (
               <RowsSection title="Body" sub="Sent in the request body." onAdd={() => setBody([...body, newParamRow()])}>
                 <ParamRows rows={body} onChange={setBody} />
               </RowsSection>
             ) : null}
 
-            {draft.body_template ? (
+            {hook.body_template ? (
               <label className="lb-field">
                 <span className="lb-label">Custom body template</span>
                 <textarea
                   className="lb-input lb-mono"
                   rows={3}
-                  value={draft.body_template}
+                  value={hook.body_template}
                   onChange={(e) => set({ body_template: e.target.value || null })}
                 />
                 <span className="lb-help">
@@ -269,26 +344,28 @@ export default function ToolDialog({
                 </span>
               </div>
               <Switch
-                checked={draft.awaitResponse}
+                checked={hook.awaitResponse}
                 label="Wait for response"
                 onChange={(v) => set({ awaitResponse: v, interruptible: v })}
               />
             </div>
-            <div className={`lb-toggle-row lb-toggle-tight${draft.awaitResponse ? "" : " lb-disabled"}`}>
+            <div className={`lb-toggle-row lb-toggle-tight${hook.awaitResponse ? "" : " lb-disabled"}`}>
               <div className="lb-toggle-text">
                 <span className="lb-toggle-label">
                   Interruptible <Info text="On: if the visitor starts talking while the call runs, it is cancelled. Off: the call finishes first, and the visitor can't interrupt it." />
                 </span>
               </div>
               <Switch
-                checked={draft.awaitResponse && draft.interruptible}
-                disabled={!draft.awaitResponse}
+                checked={hook.awaitResponse && hook.interruptible}
+                disabled={!hook.awaitResponse}
                 label="Interruptible"
-                title={draft.awaitResponse ? undefined : "Only when waiting for the response"}
+                title={hook.awaitResponse ? undefined : "Only when waiting for the response"}
                 onChange={(v) => set({ interruptible: v })}
               />
             </div>
           </details>
+          </>
+          )}
         </div>
 
         <footer className="lb-dialog-foot">
@@ -594,5 +671,158 @@ function TestPanel({ tool, agentId }: { tool: WebhookTool; agentId?: string }) {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* CLIENT (§2.5)                                                       */
+/* ------------------------------------------------------------------ */
+
+function ClientFields({
+  client,
+  onClient,
+  schema,
+  onSchema,
+  schemaError,
+  open,
+  onOpen,
+}: {
+  client: ClientTool;
+  onClient: (patch: Partial<ClientTool>) => void;
+  schema: string;
+  onSchema: (text: string) => void;
+  schemaError: string | null;
+  open: boolean;
+  onOpen: (open: boolean) => void;
+}) {
+  const [tab, setTab] = useState<"example" | "schema">("schema");
+  const [example, setExample] = useState("");
+  const [exampleError, setExampleError] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2500);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  function convert() {
+    try {
+      onSchema(schemaText(inferSchema(example)));
+      setExampleError(null);
+      setTab("schema");
+      setToast("Schema generated from example!");
+    } catch (e) {
+      setExampleError(example.trim() ? (e instanceof Error ? e.message : String(e)) : "Paste an example first, or press Try example.");
+    }
+  }
+
+  return (
+    <details className="lb-optional" open={open} onToggle={(e) => onOpen(e.currentTarget.open)}>
+      <summary>Optional settings</summary>
+
+      <div className="lb-field">
+        <span className="lb-label">Parameters schema</span>
+        <div className="lb-seg lb-seg-full" role="tablist" aria-label="Parameters schema">
+          <button type="button" role="tab" aria-selected={tab === "example"} className={tab === "example" ? "lb-seg-on" : undefined} onClick={() => setTab("example")}>
+            Example JSON
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "schema"} className={tab === "schema" ? "lb-seg-on" : undefined} onClick={() => setTab("schema")}>
+            Schema
+          </button>
+        </div>
+        {tab === "example" ? (
+          <>
+            <div className="lb-help-row">
+              <span className="lb-sublabel">Example JSON</span>
+              <span className="lb-help-row-end">
+                <button type="button" className="lb-link" onClick={() => setExample(WEATHER_EXAMPLE)}>
+                  Try example
+                </button>
+                <Info text="Paste the arguments your app expects, as one JSON object. Every key becomes a required parameter of the type its value has." />
+              </span>
+            </div>
+            <textarea
+              className="lb-input lb-mono lb-json"
+              rows={6}
+              value={example}
+              placeholder={WEATHER_EXAMPLE}
+              aria-label="Example JSON"
+              onChange={(e) => setExample(e.target.value)}
+            />
+            {exampleError ? <p className="lb-error">{exampleError}</p> : null}
+            <button type="button" className="l-btn l-btn-primary lb-btn-sm lb-btn-block" onClick={convert}>
+              ⚡ Convert example to schema
+            </button>
+          </>
+        ) : (
+          <>
+            <textarea
+              className={`lb-input lb-mono lb-json${schemaError ? " lb-invalid" : ""}`}
+              rows={8}
+              value={schema}
+              aria-label="Parameters schema"
+              spellCheck={false}
+              onChange={(e) => onSchema(e.target.value)}
+            />
+            {schemaError ? <p className="lb-error">{schemaError}</p> : null}
+          </>
+        )}
+        <p className="lb-help">
+          Add <code className="lb-mono">strict:true</code> to ensure the response always follows this schema.{" "}
+          <Info text="Stored with the tool. Gemini does not enforce strict schemas yet, so treat it as documentation for now." />
+        </p>
+        {toast ? (
+          <div className="lb-dialog-toast" role="status">
+            {toast}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="lb-toggle-row lb-toggle-tight">
+        <div className="lb-toggle-text">
+          <span className="lb-toggle-label">Await result</span>
+          <span className="lb-help" style={{ margin: 0 }}>
+            Pause the conversation until your app sends a result back.
+          </span>
+        </div>
+        <Switch
+          checked={client.awaitResult}
+          label="Await result"
+          onChange={(v) => onClient({ awaitResult: v, interruptible: v })}
+        />
+      </div>
+      {client.awaitResult ? (
+        <label className="lb-field lb-timeout">
+          <span className="lb-label">Timeout (seconds)</span>
+          <input
+            className="lb-input"
+            type="number"
+            min={1}
+            max={60}
+            value={client.timeout_s || ""}
+            placeholder="10"
+            onChange={(e) => onClient({ timeout_s: e.target.value === "" ? 0 : Number(e.target.value) })}
+          />
+          <span className="lb-help" style={{ margin: 0 }}>
+            How long the engine waits before timing out. Default is 10s.
+          </span>
+        </label>
+      ) : null}
+      <div className={`lb-toggle-row lb-toggle-tight${client.awaitResult ? "" : " lb-disabled"}`}>
+        <div className="lb-toggle-text">
+          <span className="lb-toggle-label">
+            Interruptible <Info text="On: if the visitor starts talking while your app works, the call is dropped. Off: the visitor can't interrupt it." />
+          </span>
+        </div>
+        <Switch
+          checked={client.awaitResult && client.interruptible}
+          disabled={!client.awaitResult}
+          label="Interruptible"
+          title={client.awaitResult ? undefined : "Only when awaiting the result"}
+          onChange={(v) => onClient({ interruptible: v })}
+        />
+      </div>
+    </details>
   );
 }

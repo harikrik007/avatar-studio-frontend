@@ -409,3 +409,58 @@ export function toolTypeChip(tool: Tool): string {
   if (k === "knowledge") return "KNOWLEDGE";
   return "SYSTEM";
 }
+
+/* ------------------------------------------------------------------ */
+/* client tools: example JSON -> schema                                 */
+/* ------------------------------------------------------------------ */
+
+export const WEATHER_EXAMPLE = `{
+  "location": "San Francisco, CA",
+  "unit": "celsius"
+}`;
+
+function inferProp(value: unknown): SchemaProp {
+  if (typeof value === "number") return { type: "number" };
+  if (typeof value === "boolean") return { type: "boolean" };
+  if (Array.isArray(value)) return { type: "array", items: value.length ? inferProp(value[0]) : { type: "string" } };
+  if (value && typeof value === "object") {
+    const props = Object.fromEntries(Object.entries(value).map(([k, v]) => [k, inferProp(v)]));
+    return { type: "object", properties: props, required: Object.keys(props) };
+  }
+  return { type: "string" };
+}
+
+/** The spec's "Convert example to schema": the type of each value, every key
+ * required, no descriptions invented. Throws on invalid JSON or a non-object. */
+export function inferSchema(exampleJson: string): ToolParameters {
+  const value = JSON.parse(exampleJson);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("The example must be a JSON object, like {\"location\": \"Paris\"}.");
+  }
+  const prop = inferProp(value);
+  return { type: "object", properties: prop.properties ?? {}, required: prop.required ?? [] };
+}
+
+/** Parse the SCHEMA textarea. Returns the schema or a readable error. */
+export function parseSchemaText(text: string): { schema?: ToolParameters; error?: string } {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (e) {
+    return { error: `Schema isn't valid JSON: ${e instanceof Error ? e.message : String(e)}` };
+  }
+  const v = value as ToolParameters | null;
+  if (!v || typeof v !== "object" || Array.isArray(v) || v.type !== "object") {
+    return { error: "Parameters must be a JSON object schema." };
+  }
+  return { schema: { ...v, properties: v.properties ?? {} } };
+}
+
+export function schemaText(schema: ToolParameters): string {
+  return JSON.stringify(schema, null, 2);
+}
+
+/** Rows for a webhook from any schema (client -> webhook switch keeps the parameters). */
+export function rowsFromSchema(schema: ToolParameters, method: string): { query: ParamRow[]; body: ParamRow[] } {
+  return rowsFromWebhook({ ...newWebhook(), method: method as HttpMethod, parameters: schema, param_in: {} });
+}

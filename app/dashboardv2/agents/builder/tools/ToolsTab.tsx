@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   isCustom,
+  newClientTool,
   newWebhook,
   toolKind,
   toolTypeChip,
@@ -80,9 +81,9 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
     return stored && toolKind(stored) === "webhook" ? (stored as { url: string }).url : null;
   };
 
-  function openNew() {
+  function openNew(kind: "client" | "webhook") {
     setMenu(false);
-    setEditing({ tool: newWebhook(), isNew: true });
+    setEditing({ tool: kind === "client" ? newClientTool() : newWebhook(), isNew: true });
   }
 
   function closeDialog() {
@@ -122,7 +123,9 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
           >
             + Add tool
           </button>
-          {menu ? <AddMenu onServer={openNew} onClose={() => setMenu(false)} /> : null}
+          {menu ? (
+            <AddMenu onClient={() => openNew("client")} onServer={() => openNew("webhook")} onClose={() => setMenu(false)} />
+          ) : null}
         </div>
       </div>
 
@@ -171,7 +174,7 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
 
         {tools.length === 0 ? (
           <p className="lb-help" style={{ margin: "12px 0 0" }}>
-            No tools yet. Add a server tool so the agent can call your API or look things up.
+            No tools yet. Add a server tool so the agent can call your API, or a client tool so it can act in your page.
           </p>
         ) : visible.length === 0 ? (
           <p className="lb-help" style={{ margin: "12px 0 0" }}>
@@ -220,7 +223,7 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
 
 /* ------------------------------------------------------------------ */
 
-function AddMenu({ onServer, onClose }: { onServer: () => void; onClose: () => void }) {
+function AddMenu({ onClient, onServer, onClose }: { onClient: () => void; onServer: () => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus();
@@ -236,12 +239,12 @@ function AddMenu({ onServer, onClose }: { onServer: () => void; onClose: () => v
   }
   return (
     <div className="lb-menu-pop lb-menu-right lb-add-menu" role="menu" ref={ref} onKeyDown={onKeyDown}>
-      <button type="button" role="menuitem" disabled title="Coming soon">
+      <button type="button" role="menuitem" onClick={onClient}>
         <span className="lb-menu-icon">
           <BracesIcon />
         </span>
         <span className="lb-menu-text">
-          Client tool<span className="lb-menu-sub">Calls your app · coming soon</span>
+          Client tool<span className="lb-menu-sub">Calls your app</span>
         </span>
       </button>
       <button type="button" role="menuitem" onClick={onServer}>

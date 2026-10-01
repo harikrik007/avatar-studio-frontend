@@ -11,6 +11,18 @@
  *   <script src="https://<studio-domain>/widget.js" data-key="pk_live_..."
  *           data-position="bottom-right" data-accent="#0f8f7b"></script>
  *
+ * Client tools (agent tools that run in this page, not on our servers):
+ *   AvatarStudio.registerToolHandler("open_booking_form", async ({ date }) => {
+ *     openBookingModal(date);
+ *     return { ok: true };          // the result, when the tool awaits one
+ *   });
+ *   AvatarStudio.on("clientToolCall", ({ toolName, arguments, respond }) => { ... });
+ * Handlers can be registered before this script loads by queueing calls:
+ *   window.AvatarStudio = window.AvatarStudio || [];
+ *   window.AvatarStudio.push(["registerToolHandler", "open_booking_form", fn]);
+ * A tool with no handler answers {error: "no handler registered for <name>"},
+ * never silence; a handler that throws answers {error: String(err)}.
+ *
  * The iframe is created lazily, on first click -- the host page pays
  * nothing (no LiveKit bundle, no extra requests) until a visitor actually
  * opens the widget. Open/close state lives here in the parent page's own
@@ -27,6 +39,38 @@
   // the second load is a silent no-op rather than a second bubble.
   if (window.__avatarStudioWidgetLoaded) return;
   window.__avatarStudioWidgetLoaded = true;
+
+  // --- client tools: the page's handlers -------------------------------------
+  var toolHandlers = {};
+  var callListeners = [];
+  var api = {
+    registerToolHandler: function (name, fn) {
+      if (typeof name === "string" && typeof fn === "function") toolHandlers[name] = fn;
+    },
+    unregisterToolHandler: function (name) {
+      delete toolHandlers[name];
+    },
+    on: function (event, fn) {
+      if (event === "clientToolCall" && typeof fn === "function") callListeners.push(fn);
+    },
+    off: function (event, fn) {
+      if (event === "clientToolCall") {
+        callListeners = callListeners.filter(function (f) { return f !== fn; });
+      }
+    },
+  };
+  // Calls queued before this script loaded: AvatarStudio.push([method, ...args])
+  var queued = window.AvatarStudio;
+  window.AvatarStudio = api;
+  if (queued && typeof queued.length === "number") {
+    for (var qi = 0; qi < queued.length; qi++) {
+      var item = queued[qi];
+      if (item && typeof api[item[0]] === "function") {
+        try { api[item[0]].apply(null, Array.prototype.slice.call(item, 1)); } catch (e) { /* bad queue entry */ }
+      }
+    }
+  }
+  try { window.dispatchEvent(new Event("avatarstudio:ready")); } catch (e) { /* very old browser */ }
 
   var currentScript = document.currentScript;
   if (!currentScript) return; // nothing to configure from -- fail silent, never break the host page
@@ -339,12 +383,52 @@
       // keeps the card and the panel simply never gets its second column.
       var want = Math.max(260, Math.min(Number(data.width) || PANEL_W, window.innerWidth - 40));
       panelWrap.style.width = want + "px";
+    } else if (data.type === "client_tool_call") {
+      runClientTool(data);
     } else if (data.type === "expand") {
       expanded = Boolean(data.expanded);
       panelWrap.style.width = (expanded ? PANEL_W_BIG : PANEL_W) + "px";
       panelWrap.style.height = (expanded ? PANEL_H_BIG : PANEL_H) + "px";
     }
   });
+
+  // A client tool call from the agent, relayed by our iframe. The answer goes
+  // back to that iframe only, at the studio's own origin.
+  function runClientTool(data) {
+    var callId = data.callId;
+    var name = String(data.toolName || "");
+    var args = data.arguments || {};
+    var answered = false;
+    function reply(payload) {
+      if (answered || !frame || !frame.contentWindow) return;
+      answered = true;
+      payload.source = "avatar-studio-host";
+      payload.type = "client_tool_result";
+      payload.callId = callId;
+      frame.contentWindow.postMessage(payload, studioOrigin);
+    }
+    function respond(result) { reply({ result: result === undefined ? null : result }); }
+    function fail(err) { reply({ error: String(err && err.message ? err.message : err) }); }
+
+    var listeners = callListeners.slice();
+    for (var li = 0; li < listeners.length; li++) {
+      try {
+        listeners[li]({ callId: callId, toolName: name, arguments: args, respond: respond });
+      } catch (e) {
+        console.error("[avatar-studio widget] clientToolCall listener threw", e);
+      }
+    }
+    var handler = toolHandlers[name];
+    if (handler) {
+      try {
+        Promise.resolve(handler(args, { callId: callId, toolName: name })).then(respond, fail);
+      } catch (e) {
+        fail(e);
+      }
+    } else if (!listeners.length) {
+      fail("no handler registered for " + name);
+    }
+  }
 
   function loadAvatar() {
     // Never blocks the bubble: it is already on the page by now, and a

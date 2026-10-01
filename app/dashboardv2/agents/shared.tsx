@@ -251,7 +251,13 @@ export function LiveTestPanel({
       room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
         try {
           const msg = JSON.parse(new TextDecoder().decode(payload));
-          if (msg.type === "transcript" && msg.text) {
+          if (msg.type === "client_tool_call" && msg.awaitResult) {
+            // The test drive has no host page to run a client tool in, so it
+            // answers for one (PLAN.md decision 3); the call and this answer
+            // show in the feed through the agent's own tool_call/tool_result.
+            const answer = { type: "client_tool_result", id: msg.id, result: { ok: true, test: true } };
+            void room.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(answer)), { reliable: true });
+          } else if (msg.type === "transcript" && msg.text) {
             pushActivity({ id: crypto.randomUUID(), kind: "transcript", role: msg.role, text: msg.text });
           } else if (msg.type === "tool_call") {
             pushActivity({ id: msg.id, kind: "tool", name: msg.name, status: "calling" });

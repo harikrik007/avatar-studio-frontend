@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VOICE_CATALOG, type VoiceTag } from "@/lib/voices";
+import type { ClientTool, Tool } from "@/lib/tools/model";
 import { DOC_EXTENSIONS, formatDocMeta, type AgentDocument, type Avatar } from "../shared";
 import type { AgentForm } from "../useAgentForm";
 
@@ -635,7 +636,53 @@ export function EmbedTab({ f, onGoLive }: { f: AgentForm; onGoLive: () => void }
           pricing/plans/etc. text is whatever this agent&apos;s own instructions say.
         </p>
       </SectionCard>
+      <ClientToolsSnippet tools={f.form.tools} />
     </>
+  );
+}
+
+/** Shown once the agent has client tools: the page code that answers them. */
+function ClientToolsSnippet({ tools }: { tools: Tool[] }) {
+  const [copied, setCopied] = useState(false);
+  const clientTools = tools.filter((t): t is ClientTool => t.type === "client");
+  if (!clientTools.length) return null;
+  const code = [
+    "<script>",
+    "  // after the widget.js tag. One handler per client tool; registered before",
+    "  // a visitor starts talking. A tool with no handler answers an error.",
+    ...clientTools.map((t) => {
+      const args = Object.keys(t.parameters?.properties ?? {});
+      return [
+        `  AvatarStudio.registerToolHandler("${t.name}", async (${args.length ? `{ ${args.join(", ")} }` : "args"}) => {`,
+        `    // ${t.awaitResult ? "your code here; the return value is sent back to the agent" : "your code here (the agent does not wait for a result)"}`,
+        "    return { ok: true };",
+        "  });",
+      ].join("\n");
+    }),
+    "</script>",
+  ].join("\n");
+  function copy() {
+    void navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+  return (
+    <SectionCard
+      n={3}
+      title="Client tool handlers"
+      footer={
+        <button type="button" className="l-btn l-btn-ghost lb-btn-sm" onClick={copy}>
+          {copied ? "Copied ✓" : "Copy code"}
+        </button>
+      }
+    >
+      <pre className="lb-code">{code}</pre>
+      <p className="lb-help">
+        Client tools run in the customer&apos;s page. Add this after the install snippet and fill in what each tool
+        should do — open a form, go to a page, read the cart. Calls with no handler reach the agent as an error.
+      </p>
+    </SectionCard>
   );
 }
 

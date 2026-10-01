@@ -4,7 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Track, type RemoteTrack } from "livekit-client";
 import { LiveKitFace } from "@/components/livekit-face";
 import { GreenScreenCanvas } from "@/components/green-screen-canvas";
-import { AvatarSession, type AvatarToolCall } from "@/lib/avatar-session";
+import { AvatarSession, type AvatarToolCall, type ClientToolCall } from "@/lib/avatar-session";
 
 type Status =
   | "idle"
@@ -317,6 +317,51 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
 
   }
 
+  /** Client tools run in the host page: widget.js holds the handlers the
+   * page registered (AvatarStudio.registerToolHandler) and posts the result
+   * back. Only the arguments travel to the page, and only to the origin this
+   * widget was opened on. */
+  function handleClientToolCall(call: ClientToolCall) {
+    const session = sessionRef.current;
+    if (!session) return;
+    if (window.parent === window) {
+      // opened directly, not embedded: there is no page to run it
+      session.sendClientToolResult(call.id, { error: `no handler registered for ${call.name}` });
+      return;
+    }
+    try {
+      window.parent.postMessage(
+        {
+          source: "avatar-studio-widget",
+          type: "client_tool_call",
+          callId: call.id,
+          toolName: call.name,
+          arguments: call.args,
+          awaitResult: call.awaitResult,
+        },
+        origin || "*"
+      );
+    } catch {
+      session.sendClientToolResult(call.id, { error: "Could not reach the page to run this tool." });
+    }
+  }
+
+  // The page's answer to a client tool call (see handleClientToolCall).
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.source !== window.parent) return;
+      if (origin && event.origin !== origin) return;
+      const data = event.data as { source?: string; type?: string; callId?: string; result?: unknown; error?: unknown };
+      if (!data || data.source !== "avatar-studio-host" || data.type !== "client_tool_result" || !data.callId) return;
+      sessionRef.current?.sendClientToolResult(
+        data.callId,
+        data.error !== undefined && data.error !== null ? { error: String(data.error) } : { result: data.result }
+      );
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [origin]);
+
   function handleToolCalls(calls: AvatarToolCall[]) {
     // The embed widget has no tool-owning UI (no cart, no account panel --
     // that lives in the customer's own product). Answering with success:
@@ -354,6 +399,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       const session = await AvatarSession.connect(
         {
           onToolCall: handleToolCalls,
+          onClientToolCall: handleClientToolCall,
           onTranscript: (role, text) => {
             armIdleTimer();
             const trimmed = text.trim();
