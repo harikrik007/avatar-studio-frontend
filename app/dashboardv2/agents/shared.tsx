@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Room, RoomEvent, Track } from "livekit-client";
 import type { RemoteTrack, RemoteTrackPublication, RemoteParticipant } from "livekit-client";
+import type { Tool } from "@/lib/tools/model";
 
 export type Avatar = {
   id: string;
@@ -25,72 +26,6 @@ export type Avatar = {
   // Measured from that still: only a face shot against a green screen can
   // be shown with its background removed.
   supports_transparency?: boolean;
-};
-
-export type ToolParameter = {
-  name: string;
-  type: string;
-  description: string;
-  required: boolean;
-};
-
-export type ToolType = "http_request" | "tavily_search";
-
-export type ToolConfig = {
-  id: string;
-  type: ToolType;
-  name: string;
-  description: string;
-  parameters: ToolParameter[];
-  method: string;
-  url: string;
-  headers: Record<string, string>;
-  body_template?: string | null;
-  // A built-in connector's own credential (e.g. tavily_search's Tavily key)
-  // -- masked as ••••1234 once saved, same convention as header values.
-  api_key: string;
-};
-
-// Headers are stored as an object but edited as text, one "Name: value" per
-// line. A row-per-header UI has to keep its own identity while a name is
-// half-typed, and this is both less code and the form people already have
-// in hand -- an auth header is usually pasted straight from an API's docs.
-export function headersToText(headers: Record<string, string>): string {
-  return Object.entries(headers ?? {})
-    .map(([k, v]) => `${k}: ${v}`)
-    .join("\n");
-}
-
-export function textToHeaders(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const line of text.split("\n")) {
-    if (!line.trim()) continue;
-    // Split on the first colon only: values contain them (Bearer tokens,
-    // URLs) and must survive intact.
-    const at = line.indexOf(":");
-    if (at === -1) continue;
-    const key = line.slice(0, at).trim();
-    if (key) out[key] = line.slice(at + 1).trim();
-  }
-  return out;
-}
-
-// Built-in connectors: zero-config beyond a name -- realtime-avatar's
-// agent/connectors.py already knows how to run these server-side, so the
-// dashboard only needs to know their label and sensible defaults, not a
-// URL/method/headers form. Custom "http_request" stays the general escape
-// hatch for a business's own API.
-export const CONNECTOR_PRESETS: Record<ToolType, { label: string; defaultName: string; defaultDescription: string }> = {
-  http_request: {
-    label: "Custom API call",
-    defaultName: "",
-    defaultDescription: "",
-  },
-  tavily_search: {
-    label: "Web search (Tavily)",
-    defaultName: "web_search",
-    defaultDescription: "Search the web for current, up-to-date information.",
-  },
 };
 
 export type AgentDocument = {
@@ -124,7 +59,8 @@ export type Agent = {
   system_prompt: string;
   opening_intro: string;
   voice: string;
-  tools_json: ToolConfig[];
+  // v2 tools (lib/tools/model.ts); the API upgrades older ones on read
+  tools_json: Tool[];
   // "provisioning" is server-derived only -- set while a real RunPod pod is
   // booting after Make live was clicked (see backend's _set_agent_live).
   // Never sent by this dashboard as a PATCH value.
@@ -151,111 +87,6 @@ export const DOC_EXTENSIONS = ".pdf,.txt,.md,.csv,.docx";
 // host ourselves on the GPU box (ditto-avatar-pipeline,
 // flashhead-avatar-pipeline) -- none has anything for a client to create.
 export const HOSTED_PROVIDERS = new Set(["anam", "ditto", "flashhead"]);
-
-export function newTool(type: ToolType = "http_request"): ToolConfig {
-  const preset = CONNECTOR_PRESETS[type];
-  return {
-    id: crypto.randomUUID(),
-    type,
-    name: preset.defaultName,
-    description: preset.defaultDescription,
-    parameters: [],
-    method: "GET",
-    url: "",
-    headers: {},
-    body_template: null,
-    api_key: "",
-  };
-}
-
-/* Runs one tool once against the real executor and shows what came back.
-   Before this, checking a tool meant starting a whole session and talking to
-   the avatar to find out a URL had a typo in it. */
-export function ToolTester({ tool, agentId }: { tool: ToolConfig; agentId?: string }) {
-  const [open, setOpen] = useState(false);
-  const [args, setArgs] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string; ms?: number } | null>(null);
-
-  async function run() {
-    setBusy(true);
-    setResult(null);
-    // Numbers must go over as numbers: a tool declaring latitude as a
-    // number gets one from the model at runtime, so sending "51.5" here
-    // would test something subtly different from the real call.
-    const typed: Record<string, unknown> = {};
-    for (const p of tool.parameters) {
-      const raw = args[p.name] ?? "";
-      if (raw === "") continue;
-      typed[p.name] =
-        p.type === "number" || p.type === "integer"
-          ? Number(raw)
-          : p.type === "boolean"
-            ? raw === "true"
-            : raw;
-    }
-    const res = await fetch("/api/tools/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tool, args: typed, agent_id: agentId ?? null }),
-    });
-    const body = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) {
-      setResult({ ok: false, text: body.detail || body.error || "Test failed." });
-      return;
-    }
-    setResult({
-      ok: body.success,
-      ms: body.duration_ms,
-      text: JSON.stringify(body.success ? body.response.result ?? body.response : body.response, null, 2),
-    });
-  }
-
-  if (tool.type !== "http_request") return null;
-
-  return (
-    <div className="l-tool-test">
-      <button type="button" className="l-btn-expand" onClick={() => setOpen((v) => !v)}>
-        {open ? "Hide test" : "Test this tool"}
-      </button>
-      {open ? (
-        <div className="l-tool-test-body">
-          {tool.parameters.length > 0 ? (
-            tool.parameters.map((p) => (
-              <div className="l-field" key={p.name}>
-                <label>{p.name || "(unnamed parameter)"}</label>
-                <input
-                  type="text"
-                  value={args[p.name] ?? ""}
-                  placeholder={p.description || `sample ${p.name}`}
-                  onChange={(e) => setArgs((prev) => ({ ...prev, [p.name]: e.target.value }))}
-                />
-              </div>
-            ))
-          ) : (
-            <p className="l-connector-note">This tool takes no parameters.</p>
-          )}
-          <button type="button" className="l-btn l-btn-ghost" disabled={busy} onClick={() => void run()}>
-            {busy ? "Running…" : "Run"}
-          </button>
-          {result ? (
-            <>
-              <p className={`l-tool-test-status ${result.ok ? "l-ok" : "l-fail"}`}>
-                {result.ok ? `Success${result.ms != null ? ` in ${result.ms} ms` : ""}` : "Failed"}
-              </p>
-              <pre className="l-tool-test-output">{result.text.slice(0, 4000)}</pre>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-export function newParam(): ToolParameter {
-  return { name: "", type: "string", description: "", required: true };
-}
 
 export function agentStatusLabel(status: Agent["status"]): string {
   if (status === "live") return "Live";
@@ -425,7 +256,8 @@ export function LiveTestPanel({
           } else if (msg.type === "tool_call") {
             pushActivity({ id: msg.id, kind: "tool", name: msg.name, status: "calling" });
           } else if (msg.type === "tool_result") {
-            const failed = msg.response?.success === false;
+            // v2 results are {result} or {error, body?}; older agents sent {success: false, ...}
+            const failed = msg.response?.success === false || msg.response?.error != null;
             // HTTP failures carry the upstream body too -- it is usually
             // the most informative part (an API's own "invalid key" or
             // "unknown city" message), so include a trimmed slice of it.

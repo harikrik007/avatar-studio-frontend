@@ -1398,6 +1398,8 @@ function AgentDialog({
   }, [agent]);
 
   const avatar = agent ? avatars.find((a) => a.id === agent.avatar_id) : null;
+  // v2 tools carry type "server" | "client" | "system"; this page only knows the older two
+  const v2Tools = (agent?.tools_json ?? []).some((t) => !["http_request", "tavily_search"].includes(String(t.type)));
 
   async function save(patch: Partial<{ name: string; opening_intro: string; system_prompt: string; voice: string; tools: ToolConfig[]; status: string }>) {
     if (!agent) return;
@@ -1529,14 +1531,25 @@ function AgentDialog({
               onChanged={onChanged}
             />
 
-            <ToolEditor tools={tools} onChange={setTools} agentId={agent.id} />
+            {v2Tools ? (
+              // Agents on hosted avatars use the new tool format (lib/tools/model.ts),
+              // which this older editor cannot show -- they are edited in the new builder.
+              <p className="l-connector-note">
+                This agent&apos;s tools are edited in the new dashboard:{" "}
+                <a href={`/dashboardv2/agents/${agent.id}?tab=tools`}>open its Tools tab</a>.
+              </p>
+            ) : (
+              <ToolEditor tools={tools} onChange={setTools} agentId={agent.id} />
+            )}
 
             <div className="l-upload-actions" style={{ marginTop: 18 }}>
               <button
                 type="button"
                 className="l-btn l-btn-primary"
                 disabled={busy}
-                onClick={() => save({ name, opening_intro: openingIntro, system_prompt: systemPrompt, voice, tools })}
+                onClick={() =>
+                  save({ name, opening_intro: openingIntro, system_prompt: systemPrompt, voice, ...(v2Tools ? {} : { tools }) })
+                }
               >
                 {busy ? (
                   <>

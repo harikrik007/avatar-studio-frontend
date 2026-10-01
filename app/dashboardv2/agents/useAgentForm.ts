@@ -15,7 +15,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DEFAULT_VOICE } from "@/lib/voices";
-import { HOSTED_PROVIDERS, type Agent, type Avatar, type ToolConfig } from "./shared";
+import type { Tool } from "@/lib/tools/model";
+import { HOSTED_PROVIDERS, type Agent, type Avatar } from "./shared";
 
 export type AgentFormState = {
   name: string;
@@ -24,7 +25,7 @@ export type AgentFormState = {
   openingIntro: string;
   systemPrompt: string;
   voice: string;
-  tools: ToolConfig[];
+  tools: Tool[];
 };
 
 const EMPTY: AgentFormState = {
