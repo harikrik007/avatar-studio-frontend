@@ -4,7 +4,8 @@
    globals.css :root). Scoped under .landing .lb so nothing else changes. */
 
 .landing .lb {
-  --lb-left-w: 460px;
+  /* wide enough for all six tabs in one row (Prompt … Advanced) */
+  --lb-left-w: 500px;
   --lb-top-h: 56px;
   display: flex;
   flex-direction: column;
@@ -195,7 +196,7 @@
   display: flex;
   align-items: stretch;
   border-bottom: 1px solid var(--border);
-  padding: 0 8px 0 18px;
+  padding: 0 18px;
   flex-shrink: 0;
 }
 
@@ -270,25 +271,6 @@
   color: var(--accent-fg);
 }
 
-.landing .lb-more {
-  align-self: center;
-  width: 30px;
-  height: 30px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--fg-muted);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.landing .lb-more:hover {
-  color: var(--fg);
-}
-
 .landing .lb-menu {
   position: relative;
   display: flex;
@@ -327,8 +309,7 @@
   cursor: pointer;
 }
 
-.landing .lb-menu-pop button:hover,
-.landing .lb-menu-pop .lb-menu-active {
+.landing .lb-menu-pop button:hover {
   background: var(--surface-3);
 }
 
@@ -1132,8 +1113,21 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* six tabs across a phone: tighter type instead of a strip that scrolls
+     Embed and Advanced out of sight */
   .landing .lb-tabs-wrap {
-    padding-left: 10px;
+    padding: 0 8px;
+  }
+
+  .landing .lb-tabs {
+    gap: 0;
+  }
+
+  .landing .lb-tab {
+    gap: 5px;
+    padding: 12px 6px 10px;
+    font-size: 11px;
+    letter-spacing: 0.03em;
   }
 
   .landing .lb-panel {

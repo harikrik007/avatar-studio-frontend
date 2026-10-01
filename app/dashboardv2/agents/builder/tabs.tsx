@@ -579,7 +579,7 @@ export function ToolsTab({ f }: { f: AgentForm }) {
             + Add tool
           </button>
           {menu ? (
-            <div className="lb-menu-pop" role="menu">
+            <div className="lb-menu-pop lb-menu-right" role="menu">
               <button type="button" role="menuitem" onClick={() => add("http_request")}>
                 + API call tool
               </button>

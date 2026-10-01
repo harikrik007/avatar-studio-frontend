@@ -235,8 +235,7 @@ export default function AgentBuilder({ agentId }: { agentId?: string }) {
         {/* ---------------- left: tabs + cards ---------------- */}
         <div className="lb-left">
           <BuilderTabs
-            tabs={CORE_TABS}
-            more={f.isCreate ? [] : MORE_TABS}
+            tabs={tabs}
             active={tab}
             onChange={goTab}
             stepState={f.isCreate ? stepDone : null}
@@ -298,58 +297,43 @@ export default function AgentBuilder({ agentId }: { agentId?: string }) {
 
 /* ------------------------------------------------------------------ */
 
+// Every tab is a visible tab. Embed and Advanced used to sit behind a "more"
+// chevron at the end of the row (the spec's overflow menu); it read as if the
+// two sections had been removed, so they are in the row like the rest.
 function BuilderTabs({
   tabs,
-  more,
   active,
   onChange,
   stepState,
 }: {
   tabs: { id: TabId; label: string }[];
-  more: { id: TabId; label: string }[];
   active: TabId;
   onChange: (t: TabId) => void;
   stepState: Record<TabId, boolean> | null;
 }) {
-  const [menu, setMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   const focusActive = useRef(false);
-  const all = [...tabs, ...more];
 
-  // Arrow keys move focus with the selection. Done once the new tab is the
-  // active one, not straight after the key press: Embed/Advanced only exist as
-  // tab buttons while active, so there was nothing to focus yet and the ring
-  // stayed behind on Tools.
+  // Arrow keys move focus with the selection, once the new tab is the active one.
   useEffect(() => {
     if (!focusActive.current) return;
     focusActive.current = false;
     document.getElementById(`lb-tab-${active}`)?.focus();
   }, [active]);
 
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [menu]);
-
   function onKeyDown(e: React.KeyboardEvent) {
-    const i = all.findIndex((t) => t.id === active);
+    const i = tabs.findIndex((t) => t.id === active);
     let next = -1;
-    if (e.key === "ArrowRight") next = (i + 1) % all.length;
-    else if (e.key === "ArrowLeft") next = (i - 1 + all.length) % all.length;
+    if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
+    else if (e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
     else if (e.key === "Home") next = 0;
-    else if (e.key === "End") next = all.length - 1;
+    else if (e.key === "End") next = tabs.length - 1;
     if (next >= 0) {
       e.preventDefault();
-      focusActive.current = all[next].id !== active;
-      onChange(all[next].id);
+      focusActive.current = tabs[next].id !== active;
+      onChange(tabs[next].id);
     }
   }
 
-  const activeIsMore = more.some((t) => t.id === active);
   return (
     <div className="lb-tabs-wrap">
       <div className="lb-tabs" role="tablist" aria-label="Agent builder" onKeyDown={onKeyDown}>
@@ -372,38 +356,7 @@ function BuilderTabs({
             {t.label}
           </button>
         ))}
-        {/* the overflow tabs stay real tabs for keyboard/screen readers when one is active */}
-        {activeIsMore ? (
-          <button id={`lb-tab-${active}`} type="button" role="tab" aria-selected="true" tabIndex={0} className="lb-tab lb-tab-active" onClick={() => onChange(active)}>
-            {more.find((t) => t.id === active)?.label}
-          </button>
-        ) : null}
       </div>
-      {more.length > 0 ? (
-        <div className="lb-menu" ref={menuRef}>
-          <button type="button" className="lb-more" aria-haspopup="menu" aria-expanded={menu} aria-label="More tabs" onClick={() => setMenu((v) => !v)}>
-            <Chevron dir="down" />
-          </button>
-          {menu ? (
-            <div className="lb-menu-pop lb-menu-right" role="menu">
-              {more.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="menuitem"
-                  className={active === t.id ? "lb-menu-active" : undefined}
-                  onClick={() => {
-                    onChange(t.id);
-                    setMenu(false);
-                  }}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
     </div>
   );
 }
