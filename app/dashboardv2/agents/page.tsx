@@ -1138,9 +1138,13 @@ const WARMING_MAX_POLLS = 10; // ~40s; the avatar normally appears in ~2
 function LiveTestPanel({
   agentId,
   onStopped,
+  pipeline,
 }: {
   agentId: string;
   onStopped: () => void;
+  // "cascade": the test-only VAD -> speech-to-text -> LLM -> TTS pipeline
+  // instead of Gemini Live (see the backend's cascade-test-session).
+  pipeline?: "cascade";
 }) {
   const [state, setState] = useState<TestState>("connecting");
   const [error, setError] = useState<string | null>(null);
@@ -1218,7 +1222,8 @@ function LiveTestPanel({
       await pendingRef.current.catch(() => {});
       if (cancelled) return;
 
-      const res = await fetch(`/api/agents/${agentId}/test-session`, { method: "POST" });
+      const query = pipeline === "cascade" ? "?pipeline=cascade" : "";
+      const res = await fetch(`/api/agents/${agentId}/test-session${query}`, { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (cancelled) return;
       if (!res.ok) {
@@ -1320,7 +1325,7 @@ function LiveTestPanel({
       pendingRef.current = pendingRef.current.catch(() => {}).then(teardown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId]);
+  }, [agentId, pipeline]);
 
   // Unhappy-path backstop while "warming": if RunPod's own job status comes
   // back FAILED, surface that instead of leaving the customer staring at
@@ -1559,7 +1564,11 @@ function AgentDialog({
   const [voicePickerOpen, setVoicePickerOpen] = useState(false);
   const [tools, setTools] = useState<ToolConfig[]>([]);
   const [busy, setBusy] = useState(false);
-  const [testing, setTesting] = useState(false);
+  // null = not testing; "live" = today's Gemini Live test; "cascade" = the
+  // test-only VAD -> speech-to-text -> LLM -> TTS pipeline.
+  const [testMode, setTestMode] = useState<null | "live" | "cascade">(null);
+  const testing = testMode !== null;
+  const setTesting = (on: boolean) => setTestMode(on ? "live" : null);
   const [statusError, setStatusError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -1650,7 +1659,12 @@ function AgentDialog({
           <div className="l-agent-dialog-split">
           <div className="l-agent-dialog-media">
           {testing ? (
-            <LiveTestPanel agentId={agent.id} onStopped={() => setTesting(false)} />
+            <LiveTestPanel
+              key={testMode ?? "off"}
+              agentId={agent.id}
+              pipeline={testMode === "cascade" ? "cascade" : undefined}
+              onStopped={() => setTesting(false)}
+            />
           ) : avatar?.preview_image_url ? (
             <img className="l-avatar-dialog-video" src={avatar.preview_image_url} alt="" />
           ) : avatar?.preview_video_url ? (
@@ -1755,8 +1769,19 @@ function AgentDialog({
                 disabled={busy || testing}
                 onClick={() => setTesting(true)}
               >
-                {testing ? "Testing…" : "Test agent"}
+                {testMode === "live" ? "Testing…" : "Test agent"}
               </button>
+              {avatar?.provider === "anam" ? (
+                <button
+                  type="button"
+                  className="l-btn l-btn-ghost"
+                  disabled={busy || testing}
+                  onClick={() => setTestMode("cascade")}
+                  title="Speech-to-text → GPT-5.6 Luna → Gemini TTS instead of Gemini Live. Test only."
+                >
+                  {testMode === "cascade" ? "Testing cascade…" : "Test cascade (beta)"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="l-btn l-btn-ghost"
@@ -1788,6 +1813,9 @@ function AgentDialog({
             <p className="l-connector-note" style={{ marginTop: 8 }}>
               Test agent opens a real, temporary live session — your mic will be requested.
               It&apos;s separate from making the agent live for your own site.
+              {avatar?.provider === "anam"
+                ? " Test cascade (beta) runs the same agent on speech-to-text → GPT-5.6 Luna → Gemini TTS instead of Gemini Live; your live widget is unchanged."
+                : null}
             </p>
             {agent.embed ? (
               <EmbedWidgetPanel agentId={agent.id} embed={agent.embed} status={agent.status} onChanged={onChanged} />

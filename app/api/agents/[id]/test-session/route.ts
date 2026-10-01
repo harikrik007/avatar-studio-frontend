@@ -8,13 +8,17 @@ const API_TOKEN = process.env.AVATAR_STUDIO_API_TOKEN || "";
 // proxies to avatar-studio's backend, which in turn calls the realtime-avatar
 // box's orchestrator. Neither of those tokens ever reaches the browser.
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.clientId) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const { id } = await params;
-  const res = await fetch(`${API_URL}/agents/${id}/test-session`, {
+  // ?pipeline=cascade: the test-only cascaded voice pipeline (VAD -> speech-
+  // to-text -> LLM -> TTS) instead of Gemini Live; stopped/polled through the
+  // same GET/DELETE below.
+  const cascade = new URL(request.url).searchParams.get("pipeline") === "cascade";
+  const res = await fetch(`${API_URL}/agents/${id}/${cascade ? "cascade-test-session" : "test-session"}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${API_TOKEN}`,
