@@ -66,6 +66,12 @@ export default async function EmbedPage({ params }: { params: Promise<{ key: str
 
   return (
     <>
+      {/* The widget runs inside a customer's page, so it opts out of the
+          dashboard's dark color scheme (globals.css :root color-scheme:
+          dark). When an iframe's color scheme differs from its host page's,
+          Chrome paints an opaque backdrop behind it -- which turned the
+          frameless avatar's transparent panel into a black box. */}
+      <style>{":root{color-scheme:normal !important}"}</style>
       {/* The document itself has to be transparent, or the host page has
           nothing to show through: globals.css paints body, and an opaque
           iframe document is opaque no matter what the parent does. Scoped
