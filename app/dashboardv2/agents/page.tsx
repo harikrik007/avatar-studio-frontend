@@ -1777,7 +1777,7 @@ function AgentDialog({
                   className="l-btn l-btn-ghost"
                   disabled={busy || testing}
                   onClick={() => setTestMode("cascade")}
-                  title="Speech-to-text → GPT-5.6 Luna → Gemini TTS instead of Gemini Live. Test only."
+                  title="Speech-to-text → Gemini 3 Flash → Gemini TTS instead of Gemini Live. Test only."
                 >
                   {testMode === "cascade" ? "Testing cascade…" : "Test cascade (beta)"}
                 </button>
@@ -1814,7 +1814,7 @@ function AgentDialog({
               Test agent opens a real, temporary live session — your mic will be requested.
               It&apos;s separate from making the agent live for your own site.
               {avatar?.provider === "anam"
-                ? " Test cascade (beta) runs the same agent on speech-to-text → GPT-5.6 Luna → Gemini TTS instead of Gemini Live; your live widget is unchanged."
+                ? " Test cascade (beta) runs the same agent on speech-to-text → Gemini 3 Flash → Gemini TTS instead of Gemini Live; your live widget is unchanged."
                 : null}
             </p>
             {agent.embed ? (
