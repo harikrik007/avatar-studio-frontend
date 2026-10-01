@@ -10,12 +10,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  SYSTEM_TOOLS,
   isCustom,
   newClientTool,
   newWebhook,
   toolKind,
   toolTypeChip,
   type CustomTool,
+  type SystemTool,
   type Tool,
   type ToolKind,
 } from "@/lib/tools/model";
@@ -63,18 +65,41 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
     return () => document.removeEventListener("mousedown", close);
   }, [menu]);
 
+  // Built-in tools are always listed (off until switched on); only a switched-on
+  // one, or one switched off again, is stored in the agent's tools.
+  const systemTools: SystemTool[] = useMemo(
+    () =>
+      Object.keys(SYSTEM_TOOLS).map(
+        (name) =>
+          (tools.find((t) => t.type === "system" && t.name === name) as SystemTool | undefined) ?? {
+            id: `system:${name}`,
+            type: "system",
+            name,
+            enabled: false,
+          }
+      ),
+    [tools]
+  );
+  const rowsAll: Tool[] = useMemo(() => [...systemTools, ...tools.filter(isCustom)], [systemTools, tools]);
   const visible = useMemo(
     () =>
-      tools.filter((t) => {
+      rowsAll.filter((t) => {
         if (typeFilter !== "all" && toolKind(t) !== typeFilter) return false;
         if (!debounced) return true;
-        const desc = isCustom(t) ? t.description : "";
-        return t.name.toLowerCase().includes(debounced) || desc.toLowerCase().includes(debounced);
+        return t.name.toLowerCase().includes(debounced) || toolDescription(t).toLowerCase().includes(debounced);
       }),
-    [tools, typeFilter, debounced]
+    [rowsAll, typeFilter, debounced]
   );
   const system = visible.filter((t) => toolKind(t) === "system");
   const custom = visible.filter((t) => toolKind(t) !== "system");
+
+  // the empty-state line under CUSTOM, only while nothing filters the list
+  const noCustomYet = !tools.some(isCustom) && !debounced && (typeFilter === "all" || typeFilter === "webhook" || typeFilter === "client");
+
+  function setEnabled(tool: Tool, enabled: boolean) {
+    const stored = tools.some((t) => t.id === tool.id);
+    setTools(stored ? tools.map((t) => (t.id === tool.id ? { ...t, enabled } : t)) : [...tools, { ...tool, enabled }]);
+  }
 
   const storedUrl = (id: string) => {
     const stored = f.agent?.tools_json.find((t) => t.id === id);
@@ -135,7 +160,7 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
         </p>
       ) : null}
 
-      <SectionCard n={1} title="Select tools" action={<span className="lb-count">{tools.length} tools</span>}>
+      <SectionCard n={1} title="Select tools" action={<span className="lb-count">{rowsAll.length} tools</span>}>
         <div className="lb-tool-search">
           <span className="lb-search-icon">
             <SearchIcon />
@@ -172,11 +197,7 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
           </div>
         ) : null}
 
-        {tools.length === 0 ? (
-          <p className="lb-help" style={{ margin: "12px 0 0" }}>
-            No tools yet. Add a server tool so the agent can call your API, or a client tool so it can act in your page.
-          </p>
-        ) : visible.length === 0 ? (
+        {visible.length === 0 ? (
           <p className="lb-help" style={{ margin: "12px 0 0" }}>
             No tools match your search.
           </p>
@@ -185,17 +206,23 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
             {system.length ? (
               <ToolGroup label="System">
                 {system.map((t) => (
-                  <ToolRow key={t.id} tool={t} onToggle={(v) => setTools(tools.map((x) => (x.id === t.id ? { ...x, enabled: v } : x)))} />
+                  <ToolRow key={t.id} tool={t} onToggle={(v) => setEnabled(t, v)} />
                 ))}
               </ToolGroup>
             ) : null}
-            {custom.length ? (
+            {custom.length || noCustomYet ? (
               <ToolGroup label="Custom">
+                {noCustomYet ? (
+                  <li className="lb-help lb-group-empty">
+                    No custom tools yet. Add a server tool so the agent can call your API, or a client tool so it can act
+                    in your page.
+                  </li>
+                ) : null}
                 {custom.map((t) => (
                   <ToolRow
                     key={t.id}
                     tool={t}
-                    onToggle={(v) => setTools(tools.map((x) => (x.id === t.id ? { ...x, enabled: v } : x)))}
+                    onToggle={(v) => setEnabled(t, v)}
                     onEdit={isCustom(t) ? () => setEditing({ tool: t, isNew: false }) : undefined}
                     onDelete={() => remove(t)}
                   />
@@ -259,6 +286,11 @@ function AddMenu({ onClient, onServer, onClose }: { onClient: () => void; onServ
   );
 }
 
+function toolDescription(tool: Tool): string {
+  if (isCustom(tool)) return tool.description;
+  return tool.type === "system" ? (SYSTEM_TOOLS[tool.name] ?? "") : "";
+}
+
 function ToolGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="lb-tool-group">
@@ -280,7 +312,7 @@ function ToolRow({
   onDelete?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const description = isCustom(tool) ? tool.description : "";
+  const description = toolDescription(tool);
   async function copyId() {
     try {
       await navigator.clipboard.writeText(tool.id);

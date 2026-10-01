@@ -464,3 +464,129 @@ export function schemaText(schema: ToolParameters): string {
 export function rowsFromSchema(schema: ToolParameters, method: string): { query: ParamRow[]; body: ParamRow[] } {
   return rowsFromWebhook({ ...newWebhook(), method: method as HttpMethod, parameters: schema, param_in: {} });
 }
+
+/* ------------------------------------------------------------------ */
+/* JSON mode (§2.8): the dialog's draft as a JSON object, and back      */
+/* ------------------------------------------------------------------ */
+
+// Anam's seeds, verbatim; switching an empty form to JSON shows one, and it
+// then becomes the form state.
+export const JSON_SEEDS = {
+  client: {
+    type: "client",
+    name: "my_client_tool",
+    description: "Describe when the AI should call this client-side function",
+    parameters: {
+      type: "object",
+      properties: { param1: { type: "string", description: "Description of parameter" } },
+      required: ["param1"],
+    },
+  },
+  webhook: {
+    type: "server",
+    subtype: "webhook",
+    name: "call_api",
+    description: "Call an external API when the user requests specific action",
+    url: "https://api.example.com/endpoint",
+    method: "POST",
+    awaitResponse: true,
+  },
+} as const;
+
+const INTERNAL_KEYS = new Set(["id", "created_at", "updated_at"]);
+
+/** The tool as the JSON editor shows it. Minimal: what differs from a new
+ * tool, plus the fields every tool has. Raw (`</> Raw config`): every field,
+ * defaults included. Never the id or timestamps. */
+export function toolJson(tool: CustomTool, raw: boolean): Record<string, unknown> {
+  const t = normalize(tool) as CustomTool;
+  if (raw) {
+    return Object.fromEntries(Object.entries(t).filter(([k, v]) => !INTERNAL_KEYS.has(k) && v !== undefined));
+  }
+  const hasParams = Object.keys(t.parameters?.properties ?? {}).length > 0;
+  if (t.type === "client") {
+    return {
+      type: "client",
+      name: t.name,
+      description: t.description,
+      ...(hasParams ? { parameters: t.parameters } : {}),
+      ...(t.awaitResult ? { awaitResult: true, timeout_s: t.timeout_s } : {}),
+      ...(t.awaitResult && !t.interruptible ? { interruptible: false } : {}),
+      ...(t.strict ? { strict: true } : {}),
+      ...(t.enabled ? {} : { enabled: false }),
+    };
+  }
+  const w = t as WebhookTool;
+  return {
+    type: "server",
+    subtype: "webhook",
+    name: w.name,
+    description: w.description,
+    url: w.url,
+    method: w.method,
+    ...(w.headers.length ? { headers: w.headers } : {}),
+    ...(hasParams ? { parameters: w.parameters, param_in: w.param_in } : {}),
+    awaitResponse: w.awaitResponse,
+    ...(w.awaitResponse && !w.interruptible ? { interruptible: false } : {}),
+    ...(w.body_template ? { body_template: w.body_template } : {}),
+    ...(w.enabled ? {} : { enabled: false }),
+  };
+}
+
+function wrongType(v: Record<string, unknown>, key: string, type: string): string | null {
+  if (v[key] === undefined) return null;
+  const ok = type === "array" ? Array.isArray(v[key]) : typeof v[key] === type && v[key] !== null && !Array.isArray(v[key]);
+  return ok ? null : `"${key}" must be ${type === "object" ? "an object" : type === "array" ? "a list" : `a ${type}`}.`;
+}
+
+/** A JSON value from the editor as a tool, keeping `base`'s id and timestamps.
+ * Accepts Anam's header shape ({"Authorization": "..."}) as well as ours. */
+export function toolFromJson(value: unknown, base: CustomTool): { tool?: CustomTool; error?: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: "The config must be a JSON object." };
+  const v = { ...(value as Record<string, unknown>) };
+  for (const [key, type] of [
+    ["name", "string"],
+    ["description", "string"],
+    ["url", "string"],
+    ["method", "string"],
+    ["parameters", "object"],
+    ["param_in", "object"],
+    ["body_template", "string"],
+    ["awaitResponse", "boolean"],
+    ["awaitResult", "boolean"],
+    ["interruptible", "boolean"],
+    ["enabled", "boolean"],
+    ["strict", "boolean"],
+    ["timeout_s", "number"],
+  ] as const) {
+    const e = wrongType(v, key, type);
+    if (e) return { error: e };
+  }
+  const keep = { id: base.id, created_at: base.created_at, updated_at: base.updated_at };
+  if (v.type === "client") {
+    // awaiting a result makes Interruptible default on (§1.1)
+    const interruptible = v.interruptible ?? Boolean(v.awaitResult);
+    return { tool: normalize({ ...newClientTool(), ...v, interruptible, ...keep, type: "client" } as ClientTool) };
+  }
+  if (v.type === "server") {
+    if (v.subtype === "knowledge") return { error: "Knowledge tools aren't available yet." };
+    if (v.subtype !== undefined && v.subtype !== "webhook") return { error: `Unknown subtype "${String(v.subtype)}".` };
+    if (v.headers !== undefined) {
+      if (Array.isArray(v.headers)) {
+        if (!v.headers.every((h) => h && typeof h === "object" && typeof h.name === "string" && typeof h.value === "string")) {
+          return { error: 'Each header needs a "name" and a "value".' };
+        }
+      } else if (v.headers && typeof v.headers === "object") {
+        v.headers = Object.entries(v.headers as Record<string, unknown>).map(([name, value]) => ({
+          name,
+          value: String(value),
+          secret: true,
+        }));
+      } else {
+        return { error: '"headers" must be a list.' };
+      }
+    }
+    return { tool: normalize({ ...newWebhook(), ...v, ...keep, type: "server", subtype: "webhook" } as WebhookTool) };
+  }
+  return { error: 'Set "type" to "client" or "server".' };
+}

@@ -267,7 +267,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     }, IDLE_TIMEOUT_MS);
   }
 
-  async function endSession(reason: "visitor_closed" | "idle_timeout" | "hard_timeout") {
+  async function endSession(reason: "visitor_closed" | "idle_timeout" | "hard_timeout" | "agent_ended") {
     if (endingRef.current) return;
     endingRef.current = true;
     clearIdleTimer();
@@ -291,7 +291,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       ? "Disconnected due to inactivity. Tap start to talk again."
       : reason === "hard_timeout"
         ? "This conversation reached its time limit. Tap start for a new one."
-        : null;
+        : reason === "agent_ended"
+          ? "Call ended. Tap start to talk again."
+          : null;
     if (notice) {
       appendSystemNotice(notice);
       setChatHidden(false);
@@ -417,6 +419,8 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           onAudioBlocked: setAudioBlocked,
           onSessionEnded: (reason) => {
             if (reason === "idle_timeout") void endSession("idle_timeout");
+            // the agent hung up (its end_call tool) after saying goodbye
+            else if (reason === "end_call") void endSession("agent_ended");
           },
           onDisconnected: () => {
             void endSession("visitor_closed");

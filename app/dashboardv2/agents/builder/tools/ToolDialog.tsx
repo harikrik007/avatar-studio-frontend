@@ -12,6 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DATA_TYPES,
+  JSON_SEEDS,
   METHODS,
   WEATHER_EXAMPLE,
   compileRows,
@@ -29,6 +30,8 @@ import {
   rowsFromWebhook,
   sampleArgs,
   schemaText,
+  toolFromJson,
+  toolJson,
   validateTool,
   type ClientTool,
   type CustomTool,
@@ -109,6 +112,11 @@ export default function ToolDialog({
         !hook.awaitResponse || Boolean(hook.body_template)
   );
   const [testOpen, setTestOpen] = useState(false);
+  // JSON mode (§2.8): one textarea, two-way bound to the form's state
+  const [mode, setMode] = useState<"form" | "json">("form");
+  const [jsonText, setJsonText] = useState("");
+  const [jsonError, setJsonError] = useState<string | null>(null);
+  const [raw, setRaw] = useState(false);
 
   useEffect(() => {
     const d = ref.current;
@@ -146,6 +154,85 @@ export default function ToolDialog({
     setKind(next);
   }
 
+  /** Put a whole tool into the form (from JSON). */
+  function applyTool(t: CustomTool) {
+    setName(t.name);
+    setDescription(t.description);
+    if (t.type === "client") {
+      setKind("client");
+      setClient(t);
+      setSchema(schemaText({ ...t.parameters, ...(t.strict ? { strict: true } : {}) }));
+    } else {
+      const w = t as WebhookTool;
+      setKind("webhook");
+      setHook(w);
+      const rows = rowsFromWebhook(w);
+      setQuery(rows.query);
+      setBody(rows.body);
+    }
+  }
+
+  /** Parse the JSON box into the form. Returns the error, if any. */
+  function syncFromJson(text: string): string | null {
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch (e) {
+      const msg = `Invalid JSON: ${e instanceof Error ? e.message : String(e)}`;
+      setJsonError(msg);
+      return msg;
+    }
+    const res = toolFromJson(value, built);
+    if (!res.tool) {
+      setJsonError(res.error ?? "Invalid config.");
+      return res.error ?? "Invalid config.";
+    }
+    setJsonError(null);
+    applyTool(res.tool);
+    return null;
+  }
+
+  // parse 300 ms after the last keystroke
+  useEffect(() => {
+    if (mode !== "json") return;
+    const t = setTimeout(() => syncFromJson(jsonText), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jsonText, mode]);
+
+  function formIsEmpty(): boolean {
+    if (name.trim() || description.trim()) return false;
+    if (kind === "client") return Object.keys(parseSchemaText(schema).schema?.properties ?? {}).length === 0;
+    return !hook.url.trim() && !query.length && !body.length && !hook.headers.length;
+  }
+
+  function switchMode(next: "form" | "json") {
+    if (next === mode) return;
+    if (next === "json") {
+      if (formIsEmpty()) {
+        // a worked example, which then becomes the form state
+        const seed = JSON_SEEDS[kind];
+        setJsonText(JSON.stringify(seed, null, 2));
+        const res = toolFromJson(seed, built);
+        if (res.tool) applyTool(res.tool);
+      } else {
+        setJsonText(JSON.stringify(toolJson(built, raw), null, 2));
+      }
+      setJsonError(null);
+      setMode("json");
+      return;
+    }
+    // back to the form: apply what is typed now, not 300 ms from now
+    if (syncFromJson(jsonText)) return;
+    setMode("form");
+  }
+
+  function toggleRaw() {
+    const next = !raw;
+    setRaw(next);
+    if (!syncFromJson(jsonText)) setJsonText(JSON.stringify(toolJson(built, next), null, 2));
+  }
+
   /** The draft as it would be saved. */
   const { built, schemaError } = useMemo((): { built: CustomTool; schemaError: string | null } => {
     if (kind === "webhook") {
@@ -173,6 +260,7 @@ export default function ToolDialog({
 
   function save() {
     setAttempted(true);
+    if (mode === "json" && syncFromJson(jsonText)) return;
     if (errors.length) return;
     onSave(built);
   }
@@ -198,15 +286,39 @@ export default function ToolDialog({
           </button>
         </header>
 
-        <div className="lb-seg" role="tablist" aria-label="Editor">
-          <button type="button" role="tab" aria-selected="true" className="lb-seg-on">
-            Form
-          </button>
-          <button type="button" role="tab" aria-selected="false" disabled title="Coming next">
-            JSON
-          </button>
+        <div className="lb-editor-row">
+          <div className="lb-seg" role="tablist" aria-label="Editor">
+            <button type="button" role="tab" aria-selected={mode === "form"} className={mode === "form" ? "lb-seg-on" : undefined} onClick={() => switchMode("form")}>
+              Form
+            </button>
+            <button type="button" role="tab" aria-selected={mode === "json"} className={mode === "json" ? "lb-seg-on" : undefined} onClick={() => switchMode("json")}>
+              {"</>"} JSON
+            </button>
+          </div>
+          {mode === "json" ? (
+            <button type="button" className={`lb-raw-toggle${raw ? " lb-raw-on" : ""}`} aria-pressed={raw} onClick={toggleRaw}
+              title="Show every field, defaults included">
+              {"</>"} Raw config
+            </button>
+          ) : null}
         </div>
 
+        {mode === "json" ? (
+          <div className="lb-dialog-body">
+            <textarea
+              className={`lb-input lb-mono lb-json lb-json-full${jsonError ? " lb-invalid" : ""}`}
+              value={jsonText}
+              spellCheck={false}
+              aria-label="Tool config (JSON)"
+              aria-invalid={Boolean(jsonError)}
+              onChange={(e) => setJsonText(e.target.value)}
+            />
+            {jsonError ? <p className="lb-error" role="alert">{jsonError}</p> : null}
+            <p className="lb-help" style={{ margin: 0 }}>
+              Edit the raw config here. Switch back to Form for the visual editor.
+            </p>
+          </div>
+        ) : (
         <div className="lb-dialog-body">
           <div className="lb-field">
             <span className="lb-label">Type</span>
@@ -367,6 +479,7 @@ export default function ToolDialog({
           </>
           )}
         </div>
+        )}
 
         <footer className="lb-dialog-foot">
           {attempted && errors.length ? (
@@ -380,7 +493,12 @@ export default function ToolDialog({
             <button type="button" className="l-btn l-btn-ghost lb-btn-sm" onClick={onClose}>
               Cancel
             </button>
-            <button type="button" className="l-btn l-btn-primary lb-btn-sm" onClick={save}>
+            <button
+              type="button"
+              className="l-btn l-btn-primary lb-btn-sm"
+              disabled={mode === "json" && Boolean(jsonError)}
+              onClick={save}
+            >
               {isNew ? "Create tool" : "Save changes"}
             </button>
           </div>

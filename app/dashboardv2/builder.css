@@ -1376,6 +1376,7 @@
 
 .landing .lb-seg-full {
   display: flex;
+  align-self: stretch;
   margin: 0;
 }
 
@@ -1392,8 +1393,9 @@
   gap: 6px;
 }
 
-.landing .lb .lb-json {
-  min-height: 120px;
+/* textarea.lb-input sets min-height with a more specific selector */
+.landing .lb textarea.lb-json {
+  min-height: 140px;
   font-size: 12.5px;
   line-height: 1.5;
   tab-size: 2;
@@ -1419,6 +1421,49 @@
 
 .landing .lb-timeout input {
   max-width: 120px;
+}
+
+.landing .lb-editor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 20px 12px;
+}
+
+.landing .lb-editor-row .lb-seg {
+  margin: 0;
+}
+
+.landing .lb-raw-toggle {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--fg-muted);
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.landing .lb-raw-toggle:hover {
+  color: var(--fg);
+}
+
+.landing .lb-raw-on {
+  color: var(--accent);
+  border-color: rgba(0, 195, 255, 0.4);
+}
+
+.landing .lb textarea.lb-json-full {
+  min-height: 46vh;
+  flex-shrink: 0;
+  resize: vertical;
+}
+
+.landing .lb-group-empty {
+  list-style: none;
+  margin: 2px 0 4px 8px;
 }
 
 /* --- embed snippet --- */
@@ -1777,7 +1822,8 @@
     padding-right: 14px;
   }
 
-  .landing .lb-seg {
+  .landing .lb-editor-row {
     margin-left: 14px;
+    margin-right: 14px;
   }
 }
