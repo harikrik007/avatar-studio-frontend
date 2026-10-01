@@ -1,0 +1,594 @@
+"use client";
+
+/**
+ * Shared pieces of the Anam dashboard's agent pages: the agent/tool types,
+ * tool-header helpers, connector presets, and the live test panel. Moved out
+ * of agents/page.tsx unchanged when the create form and edit dialog were
+ * replaced by the full-page builder (builder/), so the list page and the
+ * builder use one copy.
+ */
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Room, RoomEvent, Track } from "livekit-client";
+import type { RemoteTrack, RemoteTrackPublication, RemoteParticipant } from "livekit-client";
+
+export type Avatar = {
+  id: string;
+  name: string;
+  status: "uploading" | "processing" | "quality_check" | "ready" | "failed";
+  // "anam" faces are hosted and shared; "wav2lip" ones were created by this
+  // client from their own video. This page only offers the former.
+  provider?: string;
+  preview_video_url?: string | null;
+  // Anam's own CDN still, which is what the picker shows.
+  preview_image_url?: string | null;
+  // Measured from that still: only a face shot against a green screen can
+  // be shown with its background removed.
+  supports_transparency?: boolean;
+};
+
+export type ToolParameter = {
+  name: string;
+  type: string;
+  description: string;
+  required: boolean;
+};
+
+export type ToolType = "http_request" | "tavily_search";
+
+export type ToolConfig = {
+  id: string;
+  type: ToolType;
+  name: string;
+  description: string;
+  parameters: ToolParameter[];
+  method: string;
+  url: string;
+  headers: Record<string, string>;
+  body_template?: string | null;
+  // A built-in connector's own credential (e.g. tavily_search's Tavily key)
+  // -- masked as ••••1234 once saved, same convention as header values.
+  api_key: string;
+};
+
+// Headers are stored as an object but edited as text, one "Name: value" per
+// line. A row-per-header UI has to keep its own identity while a name is
+// half-typed, and this is both less code and the form people already have
+// in hand -- an auth header is usually pasted straight from an API's docs.
+export function headersToText(headers: Record<string, string>): string {
+  return Object.entries(headers ?? {})
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n");
+}
+
+export function textToHeaders(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    // Split on the first colon only: values contain them (Bearer tokens,
+    // URLs) and must survive intact.
+    const at = line.indexOf(":");
+    if (at === -1) continue;
+    const key = line.slice(0, at).trim();
+    if (key) out[key] = line.slice(at + 1).trim();
+  }
+  return out;
+}
+
+// Built-in connectors: zero-config beyond a name -- realtime-avatar's
+// agent/connectors.py already knows how to run these server-side, so the
+// dashboard only needs to know their label and sensible defaults, not a
+// URL/method/headers form. Custom "http_request" stays the general escape
+// hatch for a business's own API.
+export const CONNECTOR_PRESETS: Record<ToolType, { label: string; defaultName: string; defaultDescription: string }> = {
+  http_request: {
+    label: "Custom API call",
+    defaultName: "",
+    defaultDescription: "",
+  },
+  tavily_search: {
+    label: "Web search (Tavily)",
+    defaultName: "web_search",
+    defaultDescription: "Search the web for current, up-to-date information.",
+  },
+};
+
+export type AgentDocument = {
+  id: string;
+  filename: string;
+  char_count: number;
+  size_bytes: number;
+  created_at: string;
+};
+
+export type EmbedKey = {
+  public_key: string;
+  allowed_origins: string[];
+  is_active: boolean;
+  max_concurrent: number;
+  accent_color: string;
+  greeting_label: string;
+};
+
+export type Deployment = {
+  role: "primary" | "scaleout";
+  status: "provisioning" | "running" | "draining" | "stopping" | "stopped" | "failed";
+  status_detail: string | null;
+  max_concurrent_sessions: number;
+};
+
+export type Agent = {
+  id: string;
+  avatar_id: string;
+  name: string;
+  system_prompt: string;
+  opening_intro: string;
+  voice: string;
+  tools_json: ToolConfig[];
+  // "provisioning" is server-derived only -- set while a real RunPod pod is
+  // booting after Make live was clicked (see backend's _set_agent_live).
+  // Never sent by this dashboard as a PATCH value.
+  status: "draft" | "provisioning" | "live";
+  // Float the avatar on the customer's page with its background keyed out.
+  // Needs a green-screen avatar; off by default, so nothing changes for an
+  // agent that does not ask for it.
+  transparent?: boolean;
+  created_at: string;
+  documents: AgentDocument[];
+  // Set once the agent has been made live at least once -- see the
+  // backend's update_agent/_set_agent_live (api/main.py). null for an
+  // agent that has never gone live, not an empty/inactive placeholder.
+  embed: EmbedKey | null;
+  // The primary Deployment behind this agent, if any -- null for
+  // box-hosted demo avatars (RingMe/pizza3/bank) even while status="live",
+  // and null before the first Make live click.
+  deployment: Deployment | null;
+};
+
+export const DOC_EXTENSIONS = ".pdf,.txt,.md,.csv,.docx";
+
+// Avatars offered in this dashboard: Anam's hosted faces plus the engines we
+// host ourselves on the GPU box (ditto-avatar-pipeline,
+// flashhead-avatar-pipeline) -- none has anything for a client to create.
+export const HOSTED_PROVIDERS = new Set(["anam", "ditto", "flashhead"]);
+
+export function newTool(type: ToolType = "http_request"): ToolConfig {
+  const preset = CONNECTOR_PRESETS[type];
+  return {
+    id: crypto.randomUUID(),
+    type,
+    name: preset.defaultName,
+    description: preset.defaultDescription,
+    parameters: [],
+    method: "GET",
+    url: "",
+    headers: {},
+    body_template: null,
+    api_key: "",
+  };
+}
+
+/* Runs one tool once against the real executor and shows what came back.
+   Before this, checking a tool meant starting a whole session and talking to
+   the avatar to find out a URL had a typo in it. */
+export function ToolTester({ tool, agentId }: { tool: ToolConfig; agentId?: string }) {
+  const [open, setOpen] = useState(false);
+  const [args, setArgs] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string; ms?: number } | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setResult(null);
+    // Numbers must go over as numbers: a tool declaring latitude as a
+    // number gets one from the model at runtime, so sending "51.5" here
+    // would test something subtly different from the real call.
+    const typed: Record<string, unknown> = {};
+    for (const p of tool.parameters) {
+      const raw = args[p.name] ?? "";
+      if (raw === "") continue;
+      typed[p.name] =
+        p.type === "number" || p.type === "integer"
+          ? Number(raw)
+          : p.type === "boolean"
+            ? raw === "true"
+            : raw;
+    }
+    const res = await fetch("/api/tools/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tool, args: typed, agent_id: agentId ?? null }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      setResult({ ok: false, text: body.detail || body.error || "Test failed." });
+      return;
+    }
+    setResult({
+      ok: body.success,
+      ms: body.duration_ms,
+      text: JSON.stringify(body.success ? body.response.result ?? body.response : body.response, null, 2),
+    });
+  }
+
+  if (tool.type !== "http_request") return null;
+
+  return (
+    <div className="l-tool-test">
+      <button type="button" className="l-btn-expand" onClick={() => setOpen((v) => !v)}>
+        {open ? "Hide test" : "Test this tool"}
+      </button>
+      {open ? (
+        <div className="l-tool-test-body">
+          {tool.parameters.length > 0 ? (
+            tool.parameters.map((p) => (
+              <div className="l-field" key={p.name}>
+                <label>{p.name || "(unnamed parameter)"}</label>
+                <input
+                  type="text"
+                  value={args[p.name] ?? ""}
+                  placeholder={p.description || `sample ${p.name}`}
+                  onChange={(e) => setArgs((prev) => ({ ...prev, [p.name]: e.target.value }))}
+                />
+              </div>
+            ))
+          ) : (
+            <p className="l-connector-note">This tool takes no parameters.</p>
+          )}
+          <button type="button" className="l-btn l-btn-ghost" disabled={busy} onClick={() => void run()}>
+            {busy ? "Running…" : "Run"}
+          </button>
+          {result ? (
+            <>
+              <p className={`l-tool-test-status ${result.ok ? "l-ok" : "l-fail"}`}>
+                {result.ok ? `Success${result.ms != null ? ` in ${result.ms} ms` : ""}` : "Failed"}
+              </p>
+              <pre className="l-tool-test-output">{result.text.slice(0, 4000)}</pre>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function newParam(): ToolParameter {
+  return { name: "", type: "string", description: "", required: true };
+}
+
+export function agentStatusLabel(status: Agent["status"]): string {
+  if (status === "live") return "Live";
+  if (status === "provisioning") return "Starting…";
+  return "Draft";
+}
+
+export function agentStatusBadgeClass(status: Agent["status"]): string {
+  if (status === "live") return "l-status-ready";
+  if (status === "provisioning") return "l-status-processing";
+  return "l-status-uploading";
+}
+
+export function formatDocMeta(doc: AgentDocument): string {
+  const kb = doc.size_bytes / 1024;
+  const size = kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(kb))} KB`;
+  return `${size} · ${doc.char_count.toLocaleString()} characters of text`;
+}
+
+export type ActivityEntry =
+  | { id: string; kind: "transcript"; role: "user" | "assistant"; text: string }
+  // `detail` carries the tool's own error text. Without it the feed only
+  // said "failed", which tells you a tool broke but not whether the URL
+  // was wrong, the API rejected the request, or it timed out -- and the
+  // session's logs are deleted on teardown, so there is nowhere else to
+  // look afterwards.
+  | { id: string; kind: "tool"; name: string; status: "calling" | "done" | "failed"; detail?: string };
+
+export type TestState = "idle" | "connecting" | "warming" | "connected" | "error";
+
+// Bounded polling of GET /test-session/{room} while "warming" -- catches a
+// real RunPod job failure (the worker never booted) instead of leaving the
+// customer staring at "warming up" forever. Not tight: the bot's own
+// LiveKit track subscription is what actually ends the warming state on
+// the happy path, this is only the unhappy-path backstop.
+export const WARMING_POLL_MS = 4000;
+export const WARMING_MAX_POLLS = 10; // ~40s; the avatar normally appears in ~2
+
+// Talks to a real LiveKit room -- the same one agent.main just published its
+// avatar video/audio tracks into -- so this is the actual test drive, not a
+// mockup: real Gemini, real tool calls, real rendered video.
+export function LiveTestPanel({
+  agentId,
+  onStopped,
+  pipeline,
+  stopLabel = "Stop test",
+  stopClassName = "l-btn l-btn-ghost",
+}: {
+  agentId: string;
+  onStopped: () => void;
+  // "cascade": the test-only VAD -> speech-to-text -> LLM -> TTS pipeline
+  // instead of Gemini Live (see the backend's cascade-test-session).
+  pipeline?: "cascade";
+  // The builder's preview calls it "End call" and styles it red.
+  stopLabel?: string;
+  stopClassName?: string;
+}) {
+  const [state, setState] = useState<TestState>("connecting");
+  const [error, setError] = useState<string | null>(null);
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [micOn, setMicOn] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const roomRef = useRef<Room | null>(null);
+  const roomNameRef = useRef<string | null>(null);
+  // Persists across React StrictMode's dev-only double-invoke of this
+  // effect (mount -> cleanup -> mount again, same instance, same refs).
+  // Without serializing on it, the second mount's start() could POST a new
+  // test session before the first mount's cleanup had finished DELETEing
+  // its session -- a real race, not just dev noise, since the orchestrator
+  // only has one slot: two sessions overlapping means the second 409s and
+  // the first leaks until its hard timeout.
+  const pendingRef = useRef<Promise<void>>(Promise.resolve());
+  const intentionalDisconnectRef = useRef(false);
+
+  const pushActivity = useCallback((entry: ActivityEntry) => {
+    setActivity((prev) => {
+      // A tool call and its result arrive as two messages sharing one id.
+      // Replacing in place makes one call render as one line that moves
+      // from "Calling…" to "responded" -- appending instead produced two
+      // lines that read as two separate calls, and collided as duplicate
+      // React keys.
+      const existing = prev.findIndex((e) => e.id === entry.id);
+      if (existing !== -1) {
+        const next = [...prev];
+        next[existing] = entry;
+        return next;
+      }
+
+      // Gemini streams transcripts in fragments ("I'm sorry," / "I can't" /
+      // "get"), so one spoken sentence arrived as a dozen lines. Merge a
+      // fragment into the previous line when it continues the same speaker.
+      const last = prev[prev.length - 1];
+      if (entry.kind === "transcript" && last?.kind === "transcript" && last.role === entry.role) {
+        const merged: ActivityEntry = {
+          ...last,
+          text: `${last.text}${last.text.endsWith(" ") || entry.text.startsWith(" ") ? "" : " "}${entry.text}`.trim(),
+        };
+        return [...prev.slice(0, -1), merged];
+      }
+
+      return [...prev.slice(-19), entry];
+    });
+  }, []);
+
+  // Tears down whatever this component instance is currently holding.
+  // Deliberately does NOT call onStopped() -- that's the parent-visible
+  // "testing ended" signal, which should only fire on an explicit Stop
+  // click or an unexpected disconnect, never on a teardown that's really
+  // just StrictMode's phantom cleanup ahead of an immediate remount.
+  const teardown = useCallback(async () => {
+    intentionalDisconnectRef.current = true;
+    roomRef.current?.disconnect();
+    roomRef.current = null;
+    const room = roomNameRef.current;
+    roomNameRef.current = null;
+    if (room) {
+      await fetch(`/api/agents/${agentId}/test-session?room=${encodeURIComponent(room)}`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
+  }, [agentId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function start() {
+      // Wait for any in-flight teardown (including a StrictMode phantom
+      // mount's cleanup) to actually finish before claiming a new session.
+      await pendingRef.current.catch(() => {});
+      if (cancelled) return;
+
+      const query = pipeline === "cascade" ? "?pipeline=cascade" : "";
+      const res = await fetch(`/api/agents/${agentId}/test-session${query}`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (cancelled) return;
+      if (!res.ok) {
+        setError(body.error || body.detail || "Couldn't start a test session.");
+        setState("error");
+        return;
+      }
+      roomNameRef.current = body.room;
+      intentionalDisconnectRef.current = false;
+
+      const room = new Room();
+      roomRef.current = room;
+
+      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _p: RemoteParticipant) => {
+        if (track.kind === Track.Kind.Video && videoRef.current) {
+          track.attach(videoRef.current);
+          // The bot's video track only exists once agent.main has actually
+          // booted and published -- this, not room.connect() resolving, is
+          // the real "live" signal for a RunPod-Serverless-backed session
+          // (unlike the old box-hosted orchestrator, connect() now
+          // resolves against an empty room almost instantly).
+          if (!cancelled) setState("connected");
+        }
+        if (track.kind === Track.Kind.Audio && audioRef.current) track.attach(audioRef.current);
+      });
+
+      room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
+        try {
+          const msg = JSON.parse(new TextDecoder().decode(payload));
+          if (msg.type === "transcript" && msg.text) {
+            pushActivity({ id: crypto.randomUUID(), kind: "transcript", role: msg.role, text: msg.text });
+          } else if (msg.type === "tool_call") {
+            pushActivity({ id: msg.id, kind: "tool", name: msg.name, status: "calling" });
+          } else if (msg.type === "tool_result") {
+            const failed = msg.response?.success === false;
+            // HTTP failures carry the upstream body too -- it is usually
+            // the most informative part (an API's own "invalid key" or
+            // "unknown city" message), so include a trimmed slice of it.
+            const detail = failed
+              ? [msg.response?.error, typeof msg.response?.body === "string" ? msg.response.body : null]
+                  .filter(Boolean)
+                  .join(" — ")
+                  .slice(0, 200)
+              : undefined;
+            pushActivity({
+              id: msg.id,
+              kind: "tool",
+              name: msg.name,
+              status: failed ? "failed" : "done",
+              detail,
+            });
+          }
+        } catch {
+          // ignore non-JSON data packets
+        }
+      });
+
+      room.on(RoomEvent.Disconnected, () => {
+        // Only a *server-initiated* disconnect should tell the parent
+        // testing ended -- our own teardown() already set the intentional
+        // flag before calling room.disconnect(), which is what fires this
+        // same event on a deliberate Stop.
+        if (!intentionalDisconnectRef.current) {
+          onStopped();
+        }
+      });
+
+      try {
+        await room.connect(body.url, body.token);
+      } catch (e) {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Couldn't join the test session.");
+          setState("error");
+        }
+        return;
+      }
+      if (cancelled) return;
+      // Room joined, but the bot itself may still be booting (RunPod cold
+      // start) -- "connected" only fires once its video track
+      // actually arrives, above. Mic still enables now, not once
+      // "connected": no reason to make the customer wait to grant mic
+      // permission just because the bot hasn't shown up yet.
+      setState("warming");
+
+      try {
+        await room.localParticipant.setMicrophoneEnabled(true);
+        if (!cancelled) setMicOn(true);
+      } catch (e) {
+        // No mic, permission denied, or (like this sandbox) no audio
+        // device at all -- the test drive still shows the avatar live,
+        // just without the customer able to talk to it by voice.
+        if (!cancelled) setMicError(e instanceof Error ? e.message : "Microphone unavailable.");
+      }
+    }
+
+    pendingRef.current = start();
+    return () => {
+      cancelled = true;
+      pendingRef.current = pendingRef.current.catch(() => {}).then(teardown);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentId, pipeline]);
+
+  // Unhappy-path backstop while "warming": if RunPod's own job status comes
+  // back FAILED, surface that instead of leaving the customer staring at
+  // "warming up" until they give up. The happy path never touches this --
+  // the TrackSubscribed handler above ends "warming" first.
+  useEffect(() => {
+    if (state !== "warming") return;
+    let cancelled = false;
+    let polls = 0;
+
+    const interval = setInterval(async () => {
+      polls += 1;
+      const room = roomNameRef.current;
+      if (!room) return;
+      try {
+        const res = await fetch(`/api/agents/${agentId}/test-session?room=${encodeURIComponent(room)}`);
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (body.runpod_status === "FAILED" || body.runpod_status === "CANCELLED") {
+          setError("The test session failed to start. Try again.");
+          setState("error");
+        }
+      } catch {
+        // A transient status-check failure isn't itself a reason to give
+        // up -- only RunPod's own reported FAILED/CANCELLED is.
+      }
+      if (polls >= WARMING_MAX_POLLS && !cancelled) {
+        setError("The avatar hasn't appeared yet. You can keep waiting, or stop and try again.");
+      }
+    }, WARMING_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [state, agentId]);
+
+  const handleStopClick = useCallback(() => {
+    void teardown().then(onStopped);
+  }, [teardown, onStopped]);
+
+  return (
+    <div className="l-live-test">
+      <div className="l-avatar-dialog-video l-live-test-video-wrap">
+        <video ref={videoRef} autoPlay playsInline className="l-live-test-video" />
+        <audio ref={audioRef} autoPlay />
+        {state !== "connected" ? (
+          <div className="l-live-test-overlay">
+            {state === "error"
+              ? error || "Something went wrong."
+              : state === "warming"
+                ? "Starting your agent — the avatar joins in a few seconds…"
+                : "Connecting…"}
+          </div>
+        ) : null}
+      </div>
+      <div className="l-live-test-bar">
+        <span className="l-live-test-status">
+          {state === "connected"
+            ? micOn
+              ? "Live — mic on, talk to your agent"
+              : `Live — ${micError || "mic unavailable"}`
+            : state === "warming"
+              ? error || "Warming up…"
+              : state === "error"
+                ? error || "Error"
+                : "Connecting…"}
+        </span>
+        <button type="button" className={stopClassName} onClick={handleStopClick}>
+          {stopLabel}
+        </button>
+      </div>
+      {activity.length > 0 ? (
+        <div className="l-live-test-activity">
+          {activity.map((e) =>
+            e.kind === "transcript" ? (
+              <div key={e.id} className={`l-live-test-line l-live-test-${e.role}`}>
+                <strong>{e.role === "user" ? "You" : "Agent"}:</strong> {e.text}
+              </div>
+            ) : (
+              <div
+                key={e.id}
+                className={`l-live-test-line l-live-test-tool${
+                  e.status === "failed" ? " l-live-test-tool-failed" : ""
+                }`}
+              >
+                {e.status === "calling"
+                  ? `Calling ${e.name}…`
+                  : e.status === "done"
+                    ? `${e.name} responded`
+                    : `${e.name} failed${e.detail ? `: ${e.detail}` : ""}`}
+              </div>
+            )
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
