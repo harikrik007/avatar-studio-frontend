@@ -1067,14 +1067,6 @@
 
 /* --- responsive --- */
 
-/* side-by-side but narrow (1024-1279): four chips across cut "Cabin Crew" to
-   "Cab…", so they go two by two */
-@media (min-width: 1024px) and (max-width: 1279px) {
-  .landing .lb-chips {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 1023px) {
   .landing .lb {
     height: auto;

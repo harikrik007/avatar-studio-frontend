@@ -29,6 +29,10 @@ export default function DashboardV2Layout({ children }: { children: React.ReactN
   const { data: session } = useSession();
   const pathname = usePathname();
   const accountName = session?.companyName || session?.user?.email || "";
+  // The agent builder (/dashboardv2/agents/new and /:id) is a full-page
+  // editor with its own back link to the list, so it gets the whole width --
+  // the rail (one nav item + account) only took room from the preview there.
+  const isBuilder = /^\/dashboardv2\/agents\/[^/]+/.test(pathname ?? "");
 
   return (
     <main className={`landing ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
@@ -45,41 +49,43 @@ export default function DashboardV2Layout({ children }: { children: React.ReactN
       </nav>
 
       <div className="l-dash-layout">
-        <aside className="l-sidebar">
-          <div className="l-sidebar-nav">
-            {NAV_ITEMS.map(({ href, label, Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                aria-current={pathname?.startsWith(href) ? "page" : undefined}
-                className={`l-sidebar-link${pathname?.startsWith(href) ? " l-sidebar-active" : ""}`}
-              >
-                <Icon />
-                {label}
-              </Link>
-            ))}
-          </div>
-
-          {session ? (
-            <div className="l-sidebar-account">
-              <div className="l-account">
-                {session.user?.image ? (
-                  <img className="l-account-avatar" src={session.user.image} alt="" />
-                ) : (
-                  <span className="l-account-avatar l-account-initial" aria-hidden="true">
-                    {accountName.slice(0, 1).toUpperCase()}
-                  </span>
-                )}
-                <span className="l-account-name" title={accountName}>
-                  {accountName}
-                </span>
-              </div>
-              <button type="button" className="l-sidebar-signout" onClick={() => signOut({ callbackUrl: "/" })}>
-                Sign out
-              </button>
+        {isBuilder ? null : (
+          <aside className="l-sidebar">
+            <div className="l-sidebar-nav">
+              {NAV_ITEMS.map(({ href, label, Icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={pathname?.startsWith(href) ? "page" : undefined}
+                  className={`l-sidebar-link${pathname?.startsWith(href) ? " l-sidebar-active" : ""}`}
+                >
+                  <Icon />
+                  {label}
+                </Link>
+              ))}
             </div>
-          ) : null}
-        </aside>
+
+            {session ? (
+              <div className="l-sidebar-account">
+                <div className="l-account">
+                  {session.user?.image ? (
+                    <img className="l-account-avatar" src={session.user.image} alt="" />
+                  ) : (
+                    <span className="l-account-avatar l-account-initial" aria-hidden="true">
+                      {accountName.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="l-account-name" title={accountName}>
+                    {accountName}
+                  </span>
+                </div>
+                <button type="button" className="l-sidebar-signout" onClick={() => signOut({ callbackUrl: "/" })}>
+                  Sign out
+                </button>
+              </div>
+            ) : null}
+          </aside>
+        )}
         <div className="l-dash-main">{children}</div>
       </div>
     </main>
