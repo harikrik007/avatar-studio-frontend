@@ -40,7 +40,7 @@ type Props = {
   previewImageUrl?: string | null;
 };
 
-type Message = { id: number; role: "assistant" | "user"; text: string; at: number };
+type Message = { id: number; role: "assistant" | "user" | "system"; text: string; at: number };
 
 // Only http(s):// and www. are ever turned into links, so nothing a model
 // says can become a javascript: or data: href.
@@ -111,6 +111,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
 
   const sessionRef = useRef<AvatarSession | null>(null);
   const roomNameRef = useRef<string | null>(null);
+  const endingRef = useRef(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoConnectStartedRef = useRef(false);
@@ -203,6 +204,13 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     });
   }
 
+  function appendSystemNotice(text: string) {
+    setMessages((prev) => {
+      messageSeqRef.current += 1;
+      return [...prev, { id: messageSeqRef.current, role: "system", text, at: Date.now() }];
+    });
+  }
+
   function displayText(text: string) {
     return text.replace(/\s+/g, " ").trim();
   }
@@ -260,6 +268,8 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   }
 
   async function endSession(reason: "visitor_closed" | "idle_timeout" | "hard_timeout") {
+    if (endingRef.current) return;
+    endingRef.current = true;
     clearIdleTimer();
     clearHardTimer();
     const room = roomNameRef.current;
@@ -277,6 +287,21 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     setDraftText("");
     setSpeakerMuted(false);
 
+    const notice = reason === "idle_timeout"
+      ? "Disconnected due to inactivity. Tap start to talk again."
+      : reason === "hard_timeout"
+        ? "This conversation reached its time limit. Tap start for a new one."
+        : null;
+    if (notice) {
+      appendSystemNotice(notice);
+      setChatHidden(false);
+    }
+    // Keep the panel's transcript column visible when it holds an ending
+    // notice; manual hang-up still returns to the compact card.
+    if (!transparent && !notice) askHost("resize", { width: CARD_W });
+    setStatus(notice ? "ended" : "idle");
+    setTranscript(notice ?? greetingLabel);
+
     if (room) {
       try {
         await fetch("/api/embed/session", {
@@ -290,19 +315,6 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       }
     }
 
-    // Only the panel widget's transcript column is a request to widen the
-    // host's box -- frameless has its own fixed size, set from config, and
-    // shrinking it to the panel's width on every hang-up is what left the
-    // avatar squeezed into a box sized for a different layout.
-    if (!transparent) askHost("resize", { width: CARD_W });
-    setStatus(reason === "idle_timeout" ? "ended" : "idle");
-    setTranscript(
-      reason === "idle_timeout"
-        ? "Ended due to inactivity. Tap start to talk again."
-        : reason === "hard_timeout"
-          ? "This conversation reached its time limit. Tap start for a new one."
-          : greetingLabel
-    );
   }
 
   function handleToolCalls(calls: AvatarToolCall[]) {
@@ -325,6 +337,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     if (status === "connecting" || status === "listening") return;
     if (ownsSessionRef.current) return;
 
+    endingRef.current = false;
     setStatus("connecting");
     setErrorMessage(null);
     setTranscript("Connecting…");
@@ -356,6 +369,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             else if (track.kind === Track.Kind.Audio) setAudioTrack(track);
           },
           onAudioBlocked: setAudioBlocked,
+          onSessionEnded: (reason) => {
+            if (reason === "idle_timeout") void endSession("idle_timeout");
+          },
           onDisconnected: () => {
             void endSession("visitor_closed");
           },
@@ -457,7 +473,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                   messages.map((m) => (
                     <p
                       key={m.id}
-                      style={m.role === "assistant" ? bubbleAgentLineStyle : bubbleVisitorLineStyle}
+                      style={m.role === "system" ? bubbleSystemLineStyle : m.role === "assistant" ? bubbleAgentLineStyle : bubbleVisitorLineStyle}
                     >
                       {linkify(displayText(m.text), bubbleLinkStyle)}
                     </p>
@@ -662,7 +678,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             {messages.map((m) => (
               <p
                 key={m.id}
-                style={m.role === "assistant" ? agentLineStyle : visitorLineStyle}
+                style={m.role === "system" ? systemLineStyle : m.role === "assistant" ? agentLineStyle : visitorLineStyle}
               >
                 {linkify(displayText(m.text), transcriptLinkStyle)}
               </p>
@@ -732,13 +748,13 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               hear has no way to follow it at all -- and it scrolls, so an
               earlier answer (a link, say) is not gone the moment the next
               one starts. */}
-          {isConnected && !showTranscript && (messages.length || transcript) ? (
+          {(isConnected || status === "ended") && !showTranscript && (messages.length || transcript) ? (
             <div ref={captionRef} className="hide-scrollbar" style={captionLogStyle}>
               {messages.length ? (
                 messages.map((m) => (
                   <p
                     key={m.id}
-                    style={m.role === "assistant" ? captionAgentLineStyle : captionVisitorLineStyle}
+                    style={m.role === "system" ? captionSystemLineStyle : m.role === "assistant" ? captionAgentLineStyle : captionVisitorLineStyle}
                   >
                     {linkify(displayText(m.text), captionLinkStyle)}
                   </p>
@@ -910,6 +926,14 @@ const bubbleAgentLineStyle: React.CSSProperties = {
   lineHeight: 1.45,
 };
 
+const bubbleSystemLineStyle: React.CSSProperties = {
+  ...bubbleAgentLineStyle,
+  color: "#ffffff",
+  background: "rgba(255,255,255,0.16)",
+  borderRadius: 8,
+  padding: "8px 10px",
+};
+
 const bubbleVisitorLineStyle: React.CSSProperties = {
   margin: 0,
   color: "rgba(245,246,247,0.62)",
@@ -1047,6 +1071,14 @@ const agentLineStyle: React.CSSProperties = {
   color: "#111827",
   maxWidth: "94%",
   alignSelf: "flex-start",
+};
+
+const systemLineStyle: React.CSSProperties = {
+  ...agentLineStyle,
+  color: "#374151",
+  background: "#eef2f7",
+  borderRadius: 8,
+  padding: "8px 10px",
 };
 
 const visitorLineStyle: React.CSSProperties = {
@@ -1226,6 +1258,14 @@ const captionAgentLineStyle: React.CSSProperties = {
   lineHeight: 1.4,
   color: "#f3f4f6",
   textAlign: "center",
+};
+
+const captionSystemLineStyle: React.CSSProperties = {
+  ...captionAgentLineStyle,
+  color: "#ffffff",
+  background: "rgba(0,0,0,0.45)",
+  borderRadius: 8,
+  padding: "8px 10px",
 };
 
 const captionVisitorLineStyle: React.CSSProperties = {

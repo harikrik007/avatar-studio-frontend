@@ -56,6 +56,12 @@ async function embedFrameAncestorsHeader(publicKey: string): Promise<string> {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Local-only host page for checking the real widget.js embed. It is never
+  // public on a production build and is not part of the deployed product.
+  if (process.env.NODE_ENV === "development" && pathname === "/sample-embed") {
+    return NextResponse.next();
+  }
+
   const embedMatch = pathname.match(/^\/embed\/([^/]+)\/?$/);
   if (embedMatch) {
     const response = NextResponse.next();

@@ -39,6 +39,7 @@ export type AvatarSessionCallbacks = {
   onSpeakingChange: (speaking: boolean) => void;
   onTrack: (track: RemoteTrack) => void;
   onAudioBlocked: (blocked: boolean) => void;
+  onSessionEnded?: (reason: string) => void;
   onDisconnected: (reason?: string) => void;
   onError: (message: string) => void;
 };
@@ -147,6 +148,9 @@ export class AvatarSession {
         break;
       case "state":
         this.callbacks.onSpeakingChange(Boolean(message.speaking));
+        break;
+      case "session_end":
+        this.callbacks.onSessionEnded?.(String(message.reason ?? ""));
         break;
       case "error":
         this.callbacks.onError(String(message.message ?? "Avatar session error."));
