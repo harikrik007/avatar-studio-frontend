@@ -7,7 +7,7 @@ import type { RemoteTrack, RemoteTrackPublication, RemoteParticipant } from "liv
 import FlowRail from "../FlowRail";
 import { AvatarThumb, DialogPlaceholder, RowChevron, SkeletonRows, Spinner } from "../ui";
 import { VoicePickerDialog } from "@/components/voice-picker-dialog";
-import { voiceById, DEFAULT_VOICE } from "@/lib/voices";
+import { voiceById, voiceName, DEFAULT_VOICE } from "@/lib/voices";
 
 type Avatar = {
   id: string;
@@ -767,7 +767,7 @@ function VoiceRowCompact({ voiceId, onChangeClick }: { voiceId: string; onChange
         </svg>
       </span>
       <span className="l-voice-info">
-        <span className="l-voice-name">{voice.id}</span>
+        <span className="l-voice-name">{voiceName(voice)}</span>
         <span className="l-voice-descriptor">{voice.descriptor}</span>
       </span>
       <button type="button" className="l-btn l-btn-ghost" onClick={onChangeClick}>

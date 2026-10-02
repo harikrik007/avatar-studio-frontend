@@ -2,9 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { VOICE_CATALOG, type VoiceTag } from "@/lib/voices";
-
-const FILTERS: (VoiceTag | "All")[] = ["All", "Male", "Female", "British"];
+import { VOICE_CATALOG, VOICE_FILTERS as FILTERS, matchesVoiceFilter, voiceName, type VoiceFilter } from "@/lib/voices";
 
 // Its own dialog, layered on top of whichever agent form opened it (see
 // that form's compact voice row) -- never an inline panel, so the agent
@@ -23,7 +21,7 @@ export function VoicePickerDialog({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [filter, setFilter] = useState<VoiceTag | "All">("All");
+  const [filter, setFilter] = useState<VoiceFilter>("All");
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(0);
   // Portaled to document.body rather than rendered in place: this dialog is
@@ -48,7 +46,7 @@ export function VoicePickerDialog({
     }
   }, [open]);
 
-  const visible = filter === "All" ? VOICE_CATALOG : VOICE_CATALOG.filter((v) => v.tag === filter);
+  const visible = VOICE_CATALOG.filter((v) => matchesVoiceFilter(v, filter));
 
   function togglePlay(voiceId: string) {
     const audio = audioRef.current;
@@ -145,7 +143,7 @@ export function VoicePickerDialog({
                 <button
                   type="button"
                   className={`l-voice-play${isPlaying ? " l-voice-play-active" : ""}`}
-                  aria-label={isPlaying ? `Stop preview of ${voice.id}` : `Preview ${voice.id}`}
+                  aria-label={isPlaying ? `Stop preview of ${voiceName(voice)}` : `Preview ${voiceName(voice)}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     togglePlay(voice.id);
@@ -165,7 +163,7 @@ export function VoicePickerDialog({
                 </button>
                 <div className="l-voice-info">
                   <span className="l-voice-name">
-                    {voice.id}
+                    {voiceName(voice)}
                     {isCurrent ? <span className="l-voice-current-tag">Current</span> : null}
                   </span>
                   <span className="l-voice-descriptor">{voice.descriptor}</span>

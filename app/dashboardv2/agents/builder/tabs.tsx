@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { VOICE_CATALOG, type VoiceTag } from "@/lib/voices";
+import { VOICE_CATALOG, VOICE_FILTERS, matchesVoiceFilter, voiceName, type VoiceFilter } from "@/lib/voices";
 import type { ClientTool, Tool } from "@/lib/tools/model";
 import { DOC_EXTENSIONS, formatDocMeta, type AgentDocument, type Avatar } from "../shared";
 import type { AgentForm } from "../useAgentForm";
@@ -389,18 +389,20 @@ function AvatarCard({ avatar, selected, onSelect }: { avatar: Avatar; selected: 
 /* VOICE (replaces the voice picker dialog in this dashboard)         */
 /* ------------------------------------------------------------------ */
 
-const VOICE_FILTERS: (VoiceTag | "All")[] = ["All", "Male", "Female", "British"];
-
 export function VoiceTab({ f }: { f: AgentForm }) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [filter, setFilter] = useState<VoiceTag | "All">("All");
+  const [filter, setFilter] = useState<VoiceFilter>("All");
   const [query, setQuery] = useState("");
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [focused, setFocused] = useState(0);
 
   const visible = useMemo(
     () =>
-      VOICE_CATALOG.filter((v) => (filter === "All" || v.tag === filter) && v.id.toLowerCase().includes(query.trim().toLowerCase())),
+      VOICE_CATALOG.filter(
+        (v) =>
+          matchesVoiceFilter(v, filter) &&
+          `${voiceName(v)} ${v.id}`.toLowerCase().includes(query.trim().toLowerCase())
+      ),
     [filter, query]
   );
 
@@ -488,7 +490,7 @@ export function VoiceTab({ f }: { f: AgentForm }) {
               <button
                 type="button"
                 className={`l-voice-play${playing ? " l-voice-play-active" : ""}`}
-                aria-label={playing ? `Stop preview of ${voice.id}` : `Preview ${voice.id}`}
+                aria-label={playing ? `Stop preview of ${voiceName(voice)}` : `Preview ${voiceName(voice)}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   togglePlay(voice.id);
@@ -508,7 +510,7 @@ export function VoiceTab({ f }: { f: AgentForm }) {
               </button>
               <div className="l-voice-info">
                 <span className="l-voice-name">
-                  {voice.id}
+                  {voiceName(voice)}
                   {current ? <span className="l-voice-current-tag">Current</span> : null}
                 </span>
                 <span className="l-voice-descriptor">{voice.descriptor}</span>

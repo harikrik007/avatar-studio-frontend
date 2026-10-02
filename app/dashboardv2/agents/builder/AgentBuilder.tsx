@@ -15,7 +15,7 @@ import "../../builder.css";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { voiceById } from "@/lib/voices";
+import { voiceById, voiceName } from "@/lib/voices";
 import { Spinner } from "../../ui";
 import { LiveTestPanel } from "../shared";
 import { useAgentForm, type AgentForm } from "../useAgentForm";
@@ -440,7 +440,7 @@ function PreviewPanel({
           </button>
           <button type="button" className="lb-chip" onClick={() => onJump("voice")}>
             <span className="lb-chip-label">Voice</span>
-            <span className="lb-chip-value">{voice.id}</span>
+            <span className="lb-chip-value">{voiceName(voice)}</span>
           </button>
           <button type="button" className="lb-chip" onClick={() => onJump("tools")}>
             <span className="lb-chip-label">Tools</span>
