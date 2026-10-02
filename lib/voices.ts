@@ -41,20 +41,21 @@ export const VOICE_CATALOG: Voice[] = [
   { id: "Sulafat", descriptor: "Persuasive, articulate, and confident", tag: "Female" },
   { id: "Vindemiatrix", descriptor: "Calm, mature, composed, and soothing", tag: "Female" },
   { id: "Zephyr", descriptor: "Upbeat, bright, and cheerful", tag: "Female" },
-  // Indian English voices from Google's Extended Voice Library (2026-10-02): ids, not names,
-  // so `name` is Google's own display name. They exist only on gemini-3.8-live (and the 3.8
-  // TTS models) -- gemini-3.1-flash-live-preview rejects them. Each was checked on 3.8 and has
-  // a preview clip in public/voice-samples. Picked from 120 by persona and description.
-  { id: "en-in-assistant-3", name: "Digital Assistant 3", descriptor: "Indian English, warm and engaging", tag: "Female", accent: "Indian" },
-  { id: "en-in-concierge-3", name: "Concierge 3", descriptor: "Indian English, professional yet approachable", tag: "Female", accent: "Indian" },
-  { id: "en-in-csagent-5", name: "Call Center Agent 5", descriptor: "Indian English, clear and friendly", tag: "Female", accent: "Indian" },
-  { id: "en-in-csagent-3", name: "Call Center Agent 3", descriptor: "Indian English, confident and clear, mature", tag: "Female", accent: "Indian" },
-  { id: "en-in-assistant-8", name: "Digital Assistant 8", descriptor: "Indian English, crisp and eager, youthful", tag: "Female", accent: "Indian" },
-  { id: "en-in-assistant-1", name: "Digital Assistant 1", descriptor: "Indian English, engaging and empathic", tag: "Male", accent: "Indian" },
-  { id: "en-in-csagent-1", name: "Call Center Agent 1", descriptor: "Indian English, natural and clear", tag: "Male", accent: "Indian" },
-  { id: "en-in-concierge-1", name: "Concierge 1", descriptor: "Indian English, warm and engaging", tag: "Male", accent: "Indian" },
-  { id: "en-in-techagent-11", name: "Tech Advisor 11", descriptor: "Indian English, confident and clear", tag: "Male", accent: "Indian" },
-  { id: "en-in-concierge-8", name: "Concierge 8", descriptor: "Indian English, bright and youthful", tag: "Male", accent: "Indian" },
+  // Indian variants (2026-10-02): the Live API has only the standard voices, so an Indian accent is
+  // the standard voice plus an instruction in the system prompt -- the backend adds it for an
+  // id ending "-Indian" (api/voices.py). Each preview clip in public/voice-samples was made that
+  // way and its pitch checked against the tag. Google's regional library voices (en-in-*) are
+  // for the TTS models only: the Live model accepts the ids but does not speak in those voices.
+  { id: "Aoede-Indian", name: "Aoede (Indian accent)", descriptor: "Indian English accent. Articulate, thoughtful, and clear", tag: "Female", accent: "Indian" },
+  { id: "Kore-Indian", name: "Kore (Indian accent)", descriptor: "Indian English accent. Energetic, youthful, and bright", tag: "Female", accent: "Indian" },
+  { id: "Despina-Indian", name: "Despina (Indian accent)", descriptor: "Indian English accent. Warm, inviting, and smooth", tag: "Female", accent: "Indian" },
+  { id: "Sulafat-Indian", name: "Sulafat (Indian accent)", descriptor: "Indian English accent. Persuasive, articulate, and confident", tag: "Female", accent: "Indian" },
+  { id: "Zephyr-Indian", name: "Zephyr (Indian accent)", descriptor: "Indian English accent. Upbeat, bright, and cheerful", tag: "Female", accent: "Indian" },
+  { id: "Puck-Indian", name: "Puck (Indian accent)", descriptor: "Indian English accent. Upbeat, engaging, and friendly", tag: "Male", accent: "Indian" },
+  { id: "Charon-Indian", name: "Charon (Indian accent)", descriptor: "Indian English accent. Smooth, reassuring, and confident", tag: "Male", accent: "Indian" },
+  { id: "Fenrir-Indian", name: "Fenrir (Indian accent)", descriptor: "Indian English accent. Conversational, direct, and approachable", tag: "Male", accent: "Indian" },
+  { id: "Alnilam-Indian", name: "Alnilam (Indian accent)", descriptor: "Indian English accent. Energetic mid-to-low pitch, enthusiastic", tag: "Male", accent: "Indian" },
+  { id: "Umbriel-Indian", name: "Umbriel (Indian accent)", descriptor: "Indian English accent. Smooth, authoritative, and calm", tag: "Male", accent: "Indian" },
 ];
 
 export const VOICE_FILTERS: VoiceFilter[] = ["All", "Male", "Female", "British", "Indian"];
