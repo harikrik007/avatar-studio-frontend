@@ -23,7 +23,19 @@ function AgentsIcon() {
   );
 }
 
-const NAV_ITEMS = [{ href: "/dashboardv2/agents", label: "Agent", Icon: AgentsIcon }];
+function UsageIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <path d="M2.5 13.5h11" strokeLinecap="round" />
+      <path d="M4.5 13.5V8M8 13.5V3.5M11.5 13.5V6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+const NAV_ITEMS = [
+  { href: "/dashboardv2/agents", label: "Agent", Icon: AgentsIcon },
+  { href: "/dashboardv2/usage", label: "Usage", Icon: UsageIcon },
+];
 
 export default function DashboardV2Layout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();

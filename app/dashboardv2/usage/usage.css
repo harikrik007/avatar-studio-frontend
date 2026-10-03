@@ -1,0 +1,283 @@
+/* The Usage page (app/dashboardv2/usage). Built on landing.css's tokens; nothing here is shared. */
+
+.landing .lu-shell {
+  max-width: 1120px;
+  /* The dashboard stacks its children on a phone and sizes each to its content, so a wide table would
+     widen the whole page. Pinned to the available width, the table scrolls inside its own box instead. */
+  width: 100%;
+  min-width: 0;
+}
+
+.landing .lu-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.landing .lu-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 8px 0 20px;
+}
+
+.landing .lu-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.landing .lu-select select {
+  font: inherit;
+  font-size: var(--l-fs-helper);
+  color: var(--l-fg);
+  background: var(--l-bg-raised);
+  border: 1px solid var(--l-border);
+  border-radius: 100px;
+  padding: 5px 28px 5px 12px;
+}
+
+.landing .lu-export {
+  margin-left: auto;
+  text-decoration: none;
+}
+
+.landing .lu-error {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+  border-radius: var(--l-radius);
+  padding: 10px 14px;
+  margin: 0 0 16px;
+  font-size: var(--l-fs-helper);
+  word-break: break-word;
+}
+
+.landing .lu-error-inline {
+  margin: 10px 0 0;
+}
+
+.landing .lu-skeleton {
+  color: var(--l-muted);
+  padding: 40px 0;
+}
+
+/* totals */
+.landing .lu-totals {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.landing .lu-stat {
+  background: var(--l-bg-raised);
+  border: 1px solid var(--l-border);
+  border-radius: var(--l-radius);
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.landing .lu-stat-warn {
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.landing .lu-stat-label {
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+}
+
+.landing .lu-stat-value {
+  font-family: var(--font-display), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+
+.landing .lu-stat-sub {
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+  overflow-wrap: anywhere;
+}
+
+/* sections and tables */
+.landing .lu-section {
+  margin-bottom: 32px;
+}
+
+.landing .lu-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+
+.landing .lu-section-head h2 {
+  font-size: var(--l-fs-heading);
+  margin: 0;
+}
+
+.landing .lu-count {
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+}
+
+.landing .lu-table-wrap {
+  /* width: 0 + min-width: 100% = fills its parent but adds nothing to the parent's own content width.
+     Without it the dashboard's phone layout (children sized to their content) widens the whole page to
+     the table's minimum width instead of letting the table scroll in its own box. */
+  width: 0;
+  min-width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--l-border);
+  border-radius: var(--l-radius);
+  background: var(--l-bg-raised);
+}
+
+.landing .lu-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--l-fs-body);
+}
+
+.landing .lu-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--l-border);
+  white-space: nowrap;
+}
+
+.landing .lu-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--l-border);
+  vertical-align: top;
+}
+
+.landing .lu-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.landing .lu-table .lu-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.landing .lu-row {
+  cursor: pointer;
+}
+
+.landing .lu-row:hover,
+.landing .lu-row-open {
+  background: var(--l-bg-raised-hover);
+}
+
+.landing .lu-expand {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--l-fg);
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.landing .lu-expand:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.landing .lu-sub {
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+}
+
+.landing .lu-warn {
+  color: #fbbf24;
+}
+
+.landing .lu-kind {
+  display: inline-block;
+  font-size: var(--l-fs-helper);
+  padding: 2px 9px;
+  border-radius: 100px;
+  border: 1px solid var(--l-border);
+  white-space: nowrap;
+}
+
+.landing .lu-kind-embed {
+  color: var(--l-accent);
+  border-color: rgba(0, 195, 255, 0.4);
+}
+
+.landing .lu-detail-row td {
+  background: var(--l-bg);
+  padding: 14px 18px 18px;
+}
+
+.landing .lu-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px 24px;
+  margin: 0 0 4px;
+}
+
+.landing .lu-facts dt {
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+}
+
+.landing .lu-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.landing .lu-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.landing .lu-flag {
+  font-size: var(--l-fs-helper);
+  padding: 2px 10px;
+  border-radius: 100px;
+  background: rgba(251, 191, 36, 0.14);
+  color: #fbbf24;
+}
+
+.landing .lu-events {
+  margin-top: 12px;
+  font-size: var(--l-fs-helper);
+}
+
+.landing .lu-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 0;
+}
+
+@media (max-width: 900px) {
+  .landing .lu-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing .lu-export {
+    margin-left: 0;
+  }
+}
