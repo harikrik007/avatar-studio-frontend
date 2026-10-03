@@ -17,15 +17,19 @@ import {
   endReasonLabel,
   flagLabel,
   formatCost,
+  formatDayRange,
   formatMinutes,
   formatSeconds,
   formatTokens,
   formatUsd,
   kindLabel,
+  localDay,
   rangeLastDays,
   statusBadgeClass,
   statusLabel,
+  tzOffsetMinutes,
   usageQuery,
+  utcLabel,
   type GroupBy,
   type UsageCalls,
   type UsageEventRow,
@@ -34,6 +38,7 @@ import {
 } from "@/lib/usage";
 
 const RANGES = [
+  { label: "Today", days: 1 },
   { label: "7 days", days: 7 },
   { label: "30 days", days: 30 },
   { label: "90 days", days: 90 },
@@ -54,7 +59,10 @@ type Detail = UsageEventRow[] | "loading" | "error";
 const hasTokens = (c: UsageItem) => c.renderer === "anam" && c.source !== "backfill";
 
 export default function UsagePage() {
-  const [days, setDays] = useState(30);
+  // A preset (1 = today, 7, 30, 90 days) or a range picked by hand.
+  const [period, setPeriod] = useState<number | "custom">(30);
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [kind, setKind] = useState("");
   const [status, setStatus] = useState("");
   const [agentId, setAgentId] = useState("");
@@ -72,8 +80,11 @@ export default function UsagePage() {
   // A slower answer to an older filter must not overwrite a newer one.
   const seq = useRef(0);
 
-  const { from, to } = rangeLastDays(days);
-  const filters = { from, to, kind, status, agent_id: scope === "mine" ? agentId : "", scope };
+  const todayStr = localDay(new Date());
+  const { from, to } = period === "custom" ? { from: customFrom || todayStr, to: customTo || todayStr } : rangeLastDays(period);
+  // Days are the viewer's own: the backend reads from/to and the Day grouping in this offset.
+  const tz = tzOffsetMinutes();
+  const filters = { from, to, kind, status, agent_id: scope === "mine" ? agentId : "", scope, tz };
   const filterKey = JSON.stringify(filters);
 
   const load = useCallback(async () => {
@@ -150,6 +161,28 @@ export default function UsagePage() {
     }
   }
 
+  function chooseCustom() {
+    if (period === "custom") return;
+    setCustomFrom(from);          // start from what is on screen, so the inputs are never empty
+    setCustomTo(to);
+    setPeriod("custom");
+  }
+
+  // The two dates always stay in order and never pass today.
+  function pickFrom(v: string) {
+    if (!v) return;
+    const day = v > todayStr ? todayStr : v;
+    setCustomFrom(day);
+    if (day > customTo) setCustomTo(day);
+  }
+
+  function pickTo(v: string) {
+    if (!v) return;
+    const day = v > todayStr ? todayStr : v;
+    setCustomTo(day);
+    if (day < customFrom) setCustomFrom(day);
+  }
+
   function chooseScope(next: "mine" | "all") {
     setScope(next);
     if (next === "mine" && groupBy === "client") setGroupBy("day");
@@ -179,13 +212,30 @@ export default function UsagePage() {
       <div className="lu-filters" role="group" aria-label="Filters">
         <div className="lu-pills" role="group" aria-label="Period">
           {RANGES.map((r) => (
-            <button key={r.days} type="button" aria-pressed={days === r.days}
-              className={`l-voice-filter-pill${days === r.days ? " l-voice-filter-active" : ""}`}
-              onClick={() => setDays(r.days)}>
+            <button key={r.days} type="button" aria-pressed={period === r.days}
+              className={`l-voice-filter-pill${period === r.days ? " l-voice-filter-active" : ""}`}
+              onClick={() => setPeriod(r.days)}>
               {r.label}
             </button>
           ))}
+          <button type="button" aria-pressed={period === "custom"}
+            className={`l-voice-filter-pill${period === "custom" ? " l-voice-filter-active" : ""}`}
+            onClick={chooseCustom}>
+            Custom
+          </button>
         </div>
+        {period === "custom" ? (
+          <div className="lu-dates" role="group" aria-label="Date range">
+            <label className="lu-date">
+              <span>From</span>
+              <input type="date" value={customFrom} max={todayStr} aria-label="From date" onChange={(e) => pickFrom(e.target.value)} />
+            </label>
+            <label className="lu-date">
+              <span>To</span>
+              <input type="date" value={customTo} max={todayStr} aria-label="To date" onChange={(e) => pickTo(e.target.value)} />
+            </label>
+          </div>
+        ) : null}
         <div className="lu-pills" role="group" aria-label="Type of call">
           {KIND_FILTERS.map((k) => (
             <button key={k.label} type="button" aria-pressed={kind === k.value}
@@ -239,6 +289,12 @@ export default function UsagePage() {
         <div className="lu-skeleton" aria-busy="true">Loading usage…</div>
       ) : (
         <>
+          {/* Only after the first load: the dates and offset are the browser's, which the server render cannot know
+              (it runs in UTC), and a different server and browser text fails hydration. */}
+          <p className="lu-range" aria-live="polite">
+            Showing <strong>{formatDayRange(from, to)}</strong> · days and times in your timezone ({utcLabel(tz)})
+          </p>
+
           {totals ? (
             <div className={`lu-totals${showCost ? " lu-totals-cost" : ""}`} aria-label="Totals for this period">
               <Stat label="Calls" value={formatTokens(totals.calls)}

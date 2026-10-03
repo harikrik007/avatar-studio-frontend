@@ -41,6 +41,49 @@
   padding: 5px 28px 5px 12px;
 }
 
+.landing .lu-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.landing .lu-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+}
+
+.landing .lu-date input {
+  font: inherit;
+  font-size: var(--l-fs-helper);
+  color: var(--l-fg);
+  background: var(--l-bg-raised);
+  border: 1px solid var(--l-border);
+  border-radius: 100px;
+  padding: 5px 12px;
+  /* scoped to these two inputs: the browser draws the calendar icon dark-on-dark otherwise */
+  color-scheme: dark;
+}
+
+.landing .lu-date input:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 2px;
+}
+
+.landing .lu-range {
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+  margin: -8px 0 18px;
+}
+
+.landing .lu-range strong {
+  color: var(--l-fg);
+  font-weight: 600;
+}
+
 .landing .lu-export {
   margin-left: auto;
   text-decoration: none;

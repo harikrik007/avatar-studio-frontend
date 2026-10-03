@@ -193,13 +193,48 @@ export function usageQuery(params: Record<string, string | number | null | undef
   return s ? `?${s}` : "";
 }
 
-export function isoDay(d: Date): string {
-  return d.toISOString().slice(0, 10);
+// Days are the viewer's own, not UTC: the backend takes the browser's offset (`tz`) and reads from/to and the Day
+// grouping in it, so a call at 2:16 AM in India on the 4th is on the 4th, not on the 3rd.
+
+/** YYYY-MM-DD of a date in the browser's timezone. */
+export function localDay(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** from/to (inclusive days) for "the last N days". */
+/** from/to (inclusive days) for "the last N days"; 1 = today. */
 export function rangeLastDays(days: number, now: Date = new Date()): { from: string; to: string } {
   const from = new Date(now);
-  from.setUTCDate(from.getUTCDate() - (days - 1));
-  return { from: isoDay(from), to: isoDay(now) };
+  from.setDate(from.getDate() - (days - 1));
+  return { from: localDay(from), to: localDay(now) };
+}
+
+/** The browser's offset from UTC in minutes, east positive (India = 330): what the backend's `tz` takes. */
+export function tzOffsetMinutes(now: Date = new Date()): number {
+  return -now.getTimezoneOffset() || 0;
+}
+
+/** UTC+5:30, UTC-7, UTC. */
+export function utcLabel(offsetMinutes: number): string {
+  if (offsetMinutes === 0) return "UTC";
+  const a = Math.abs(offsetMinutes);
+  const h = Math.floor(a / 60);
+  const m = a % 60;
+  return `UTC${offsetMinutes < 0 ? "-" : "+"}${h}${m ? `:${String(m).padStart(2, "0")}` : ""}`;
+}
+
+function dayDate(day: string): Date {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** "Oct 4, 2026" for one day, "Sep 5 – Oct 4, 2026" for a range. */
+export function formatDayRange(from: string, to: string): string {
+  const a = dayDate(from);
+  const b = dayDate(to);
+  const full = (d: Date) => d.toLocaleDateString(undefined, { dateStyle: "medium" });
+  if (from === to) return full(a);
+  const sameYear = a.getFullYear() === b.getFullYear();
+  const start = a.toLocaleDateString(undefined, sameYear ? { month: "short", day: "numeric" } : { dateStyle: "medium" });
+  return `${start} – ${full(b)}`;
 }
