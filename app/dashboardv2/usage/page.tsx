@@ -16,9 +16,11 @@ import {
   KIND_FILTERS,
   endReasonLabel,
   flagLabel,
+  formatCost,
   formatMinutes,
   formatSeconds,
   formatTokens,
+  formatUsd,
   kindLabel,
   rangeLastDays,
   statusBadgeClass,
@@ -156,6 +158,8 @@ export default function UsagePage() {
 
   const totals = summary?.totals;
   const isAdmin = summary?.is_admin ?? false;
+  // Prices are the administrator's: the backend sends no cost to anyone else, and the page asks for none.
+  const showCost = isAdmin && !!totals?.cost;
   const showClient = scope === "all";
   const groupOptions: { value: GroupBy; label: string }[] = [
     { value: "day", label: "Day" },
@@ -236,7 +240,7 @@ export default function UsagePage() {
       ) : (
         <>
           {totals ? (
-            <div className="lu-totals" aria-label="Totals for this period">
+            <div className={`lu-totals${showCost ? " lu-totals-cost" : ""}`} aria-label="Totals for this period">
               <Stat label="Calls" value={formatTokens(totals.calls)}
                 sub={[`${totals.completed} completed`, totals.failed ? `${totals.failed} failed` : "",
                   totals.lost ? `${totals.lost} lost` : "", totals.active ? `${totals.active} running` : ""]
@@ -247,7 +251,22 @@ export default function UsagePage() {
               <Stat label="Output tokens" value={formatTokens(totals.output_tokens)}
                 sub={totals.thought_tokens > 0 ? `+ ${formatTokens(totals.thought_tokens)} thinking` : undefined} />
               <Stat label="Tool calls" value={formatTokens(totals.tool_calls)} />
+              {showCost && totals.cost ? (
+                <Stat label="Estimated cost" value={formatCost(totals.cost)}
+                  sub={`Gemini ${formatUsd(totals.cost.llm)} · Anam ${formatUsd(totals.cost.anam)}`} />
+              ) : null}
             </div>
+          ) : null}
+
+          {showCost && summary?.pricing ? (
+            <p className="lu-note" role="note">
+              Estimated cost is at list prices read on {summary.pricing.as_of}: Gemini Live and the cascade&apos;s
+              language model, voice and transcription by the tokens or audio minutes each report counted, thinking
+              as output; Anam at ${summary.pricing.anam_per_minute.toFixed(2)} a minute, billed by the second.
+              GPU renderers (Ditto, FlashHead, Wav2Lip) are not priced. ≈ marks calls from before usage logging,
+              priced from approximate seconds with no model usage.
+              {totals?.cost?.partial ? " Some usage is on a model with no known price and is left out." : ""}
+            </p>
           ) : null}
 
           {summary && summary.groups.length > 0 ? (
@@ -273,6 +292,7 @@ export default function UsagePage() {
                       <th className="lu-num">Anam time</th>
                       <th className="lu-num">Input</th>
                       <th className="lu-num">Output</th>
+                      {showCost ? <th className="lu-num">Est. cost</th> : null}
                       <th className="lu-num">Failed</th>
                     </tr>
                   </thead>
@@ -284,6 +304,7 @@ export default function UsagePage() {
                         <td className="lu-num">{formatMinutes(g.anam_seconds)}</td>
                         <td className="lu-num">{formatTokens(g.input_tokens)}</td>
                         <td className="lu-num">{formatTokens(g.output_tokens)}</td>
+                        {showCost ? <td className="lu-num">{formatCost(g.cost)}</td> : null}
                         <td className="lu-num">{g.failed + g.lost > 0 ? formatTokens(g.failed + g.lost) : "—"}</td>
                       </tr>
                     ))}
@@ -314,6 +335,7 @@ export default function UsagePage() {
                       <th className="lu-num">Anam time</th>
                       <th className="lu-num">Input</th>
                       <th className="lu-num">Output</th>
+                      {showCost ? <th className="lu-num">Est. cost</th> : null}
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -342,13 +364,14 @@ export default function UsagePage() {
                           </td>
                           <td className="lu-num">{hasTokens(c) ? formatTokens(c.input_tokens) : "—"}</td>
                           <td className="lu-num">{hasTokens(c) ? formatTokens(c.output_tokens) : "—"}</td>
+                          {showCost ? <td className="lu-num">{formatCost(c.cost)}</td> : null}
                           <td>
                             <span className={`l-status-badge ${statusBadgeClass(c.status)}`}>{statusLabel(c.status)}</span>
                           </td>
                         </tr>
                         {open === c.id ? (
                           <tr className="lu-detail-row">
-                            <td colSpan={7}><CallDetail call={c} events={details[c.id]} /></td>
+                            <td colSpan={showCost ? 8 : 7}><CallDetail call={c} events={details[c.id]} showCost={showCost} /></td>
                           </tr>
                         ) : null}
                       </Fragment>
@@ -365,6 +388,7 @@ export default function UsagePage() {
               </div>
             ) : null}
           </section>
+
         </>
       )}
     </div>
@@ -381,11 +405,15 @@ function Stat({ label, value, sub, warn }: { label: string; value: string; sub?:
   );
 }
 
-function CallDetail({ call, events }: { call: UsageItem; events: Detail | undefined }) {
+function CallDetail({ call, events, showCost }: { call: UsageItem; events: Detail | undefined; showCost: boolean }) {
   const tokens = hasTokens(call);
   return (
     <div className="lu-detail">
       <dl className="lu-facts">
+        {showCost && call.cost ? (
+          <div><dt>Estimated cost</dt><dd>{formatCost(call.cost)} <span className="lu-sub">(Gemini {formatUsd(call.cost.llm)} · Anam {formatUsd(call.cost.anam)})</span>
+            {call.cost.partial ? <div className="lu-sub lu-warn">some usage has no known price</div> : null}</dd></div>
+        ) : null}
         <div><dt>How it ended</dt><dd>{call.status === "active" ? "Still running" : endReasonLabel(call.end_reason)}</dd></div>
         <div><dt>Call length</dt><dd>{formatSeconds(call.duration_seconds)}</dd></div>
         {call.renderer === "anam" ? (
@@ -422,7 +450,8 @@ function CallDetail({ call, events }: { call: UsageItem; events: Detail | undefi
               <table className="lu-table lu-events">
                 <thead>
                   <tr><th>#</th><th>Part</th><th className="lu-num">Input text</th><th className="lu-num">Input audio</th>
-                    <th className="lu-num">Output</th><th className="lu-num">Thinking</th><th className="lu-num">Total</th></tr>
+                    <th className="lu-num">Output</th><th className="lu-num">Thinking</th><th className="lu-num">Total</th>
+                    {showCost ? <th className="lu-num">Est. cost</th> : null}</tr>
                 </thead>
                 <tbody>
                   {events.map((e) => (
@@ -434,6 +463,7 @@ function CallDetail({ call, events }: { call: UsageItem; events: Detail | undefi
                       <td className="lu-num">{formatTokens(e.output_text_tokens + e.output_audio_tokens + e.output_other_tokens)}</td>
                       <td className="lu-num">{formatTokens(e.thought_tokens)}</td>
                       <td className="lu-num">{e.component === "stt" && e.audio_seconds ? `${e.audio_seconds.toFixed(1)} s audio` : formatTokens(e.total_tokens)}</td>
+                      {showCost ? <td className="lu-num">{e.est_cost === undefined ? "—" : e.est_cost === null ? "no price" : formatUsd(e.est_cost)}</td> : null}
                     </tr>
                   ))}
                 </tbody>

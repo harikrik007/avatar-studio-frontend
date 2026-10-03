@@ -36,10 +36,16 @@ export type UsageItem = {
   generations: number;
   tool_calls: number;
   stt_audio_seconds: number;
+  /** Administrators only: the backend leaves it out for everyone else. null = nothing to price (GPU renderer). */
+  cost?: UsageCost | null;
   client_id?: string;
   client_email?: string | null;
   client_company?: string | null;
 };
+
+/** The estimate, USD. `partial`: some usage had no rate. `approx`: priced from approximate (pre-logging) seconds. */
+export type UsageCost = { currency: string; llm: number; anam: number; total: number; partial: boolean; approx: boolean };
+export type UsagePricing = { currency: string; as_of: string; anam_per_minute: number; basis: string };
 
 export type UsageEventRow = {
   seq: number;
@@ -55,6 +61,8 @@ export type UsageEventRow = {
   thought_tokens: number;
   total_tokens: number;
   audio_seconds: number | null;
+  /** Administrators only. null = the model has no rate. */
+  est_cost?: number | null;
 };
 
 export type UsageTotals = {
@@ -70,6 +78,8 @@ export type UsageTotals = {
   thought_tokens: number;
   total_tokens: number;
   tool_calls: number;
+  backfill_calls: number;
+  cost?: UsageCost;
 };
 
 export type UsageGroup = UsageTotals & { key: string | null; label: string };
@@ -79,6 +89,7 @@ export type UsageSummary = {
   group_by: GroupBy;
   totals: UsageTotals;
   groups: UsageGroup[];
+  pricing?: UsagePricing;
 };
 export type UsageCalls = { total: number; limit: number; offset: number; is_admin: boolean; items: UsageItem[] };
 
@@ -155,6 +166,21 @@ export function formatMinutes(s: number): string {
 
 export function formatTokens(n: number | null | undefined): string {
   return (n ?? 0).toLocaleString("en-US");
+}
+
+/** US dollars. Calls cost fractions of a cent, so below a dollar four decimals: $0.0079; $35.02 above. */
+export function formatUsd(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "—";
+  if (n === 0) return "$0.00";
+  if (n < 0.0001) return "<$0.0001";
+  if (n < 1) return `$${n.toFixed(4)}`;
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** A call's or a group's estimate for a table cell; "≈" when it rests on approximate seconds. */
+export function formatCost(cost: UsageCost | null | undefined): string {
+  if (!cost) return "—";
+  return `${cost.approx ? "≈ " : ""}${formatUsd(cost.total)}`;
 }
 
 /** Query string for the usage endpoints; empty values are left out. */
