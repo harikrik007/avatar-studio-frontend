@@ -5,12 +5,10 @@ export type UsageStatus = "active" | "completed" | "failed" | "lost";
 
 export type UsageItem = {
   id: string;
-  room: string;
   kind: UsageKind;
   agent_id: string | null;
   agent_name: string | null;
   origin: string | null;
-  renderer: string;
   pipeline: string;
   model: string | null;
   voice: string | null;
@@ -18,30 +16,41 @@ export type UsageItem = {
   ended_at: string | null;
   status: UsageStatus;
   end_reason: string | null;
-  error: string | null;
   flags: string[];
   source: string;
-  /** Anam's billed seconds when reconciled, otherwise what we measured. */
-  seconds: number | null;
-  renderer_seconds: number | null;
-  anam_seconds_billed: number | null;
+  /** How long the call ran, in seconds: what it is charged on (the provider's billed seconds once reconciled, otherwise what we measured). */
+  call_seconds: number | null;
+  /** What the client is charged for it. Everyone gets this. */
+  charge: UsageCharge | null;
   duration_seconds: number | null;
-  input_tokens: number;
-  input_audio_tokens: number;
-  output_tokens: number;
-  output_audio_tokens: number;
-  thought_tokens: number;
-  cached_tokens: number;
-  total_tokens: number;
-  generations: number;
   tool_calls: number;
-  stt_audio_seconds: number;
+  // Administrators only: the backend leaves all of these out of a client's response.
+  room?: string;
+  error?: string | null;
+  renderer?: string;
+  seconds?: number | null;
+  renderer_seconds?: number | null;
+  anam_seconds_billed?: number | null;
+  input_tokens?: number;
+  input_audio_tokens?: number;
+  output_tokens?: number;
+  output_audio_tokens?: number;
+  thought_tokens?: number;
+  cached_tokens?: number;
+  total_tokens?: number;
+  generations?: number;
+  stt_audio_seconds?: number;
   /** Administrators only: the backend leaves it out for everyone else. null = nothing to price (GPU renderer). */
   cost?: UsageCost | null;
   client_id?: string;
   client_email?: string | null;
   client_company?: string | null;
 };
+
+/** What a client is charged, USD: a flat rate on the call's seconds. `approx`: the seconds are approximate (a call from before usage logging). */
+export type UsageCharge = { currency: string; usd: number; approx: boolean };
+/** The client's rate, as the backend has it (US$0.20 a minute, billed by the second). */
+export type UsageBilling = { currency: string; per_minute: number; per_second: number };
 
 /** The estimate, USD. `partial`: some usage had no rate. `approx`: priced from approximate (pre-logging) seconds. */
 export type UsageCost = { currency: string; llm: number; anam: number; total: number; partial: boolean; approx: boolean };
@@ -71,14 +80,17 @@ export type UsageTotals = {
   failed: number;
   lost: number;
   active: number;
-  anam_seconds: number;
-  other_renderer_seconds: number;
-  input_tokens: number;
-  output_tokens: number;
-  thought_tokens: number;
-  total_tokens: number;
+  call_seconds: number;
+  charge: UsageCharge;
   tool_calls: number;
-  backfill_calls: number;
+  // Administrators only: the backend leaves all of these out of a client's response.
+  anam_seconds?: number;
+  other_renderer_seconds?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  thought_tokens?: number;
+  total_tokens?: number;
+  backfill_calls?: number;
   cost?: UsageCost;
 };
 
@@ -89,9 +101,17 @@ export type UsageSummary = {
   group_by: GroupBy;
   totals: UsageTotals;
   groups: UsageGroup[];
+  billing: UsageBilling;
   pricing?: UsagePricing;
 };
-export type UsageCalls = { total: number; limit: number; offset: number; is_admin: boolean; items: UsageItem[] };
+export type UsageCalls = {
+  total: number;
+  limit: number;
+  offset: number;
+  is_admin: boolean;
+  billing: UsageBilling;
+  items: UsageItem[];
+};
 
 export type GroupBy = "day" | "agent" | "kind" | "client";
 
@@ -142,9 +162,9 @@ export function flagLabel(flag: string): string {
   const map: Record<string, string> = {
     failed: "Failed",
     lost: "Lost",
-    anam_mismatch: "Anam seconds differ",
-    anam_still_running: "Anam still running",
-    anam_unknown: "Anam has no record",
+    anam_mismatch: "Call seconds differ",
+    anam_still_running: "Call still running",
+    anam_unknown: "No record of the call",
   };
   return map[flag] ?? flag.replace(/_/g, " ");
 }
@@ -159,9 +179,9 @@ export function formatSeconds(s: number | null | undefined): string {
   return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} m`;
 }
 
-/** Anam minutes with one decimal, the unit their plans are quoted in. */
-export function formatMinutes(s: number): string {
-  return `${(s / 60).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} min`;
+/** Minutes with one decimal. */
+export function formatMinutes(s: number | null | undefined): string {
+  return `${((s ?? 0) / 60).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} min`;
 }
 
 export function formatTokens(n: number | null | undefined): string {
@@ -175,6 +195,26 @@ export function formatUsd(n: number | null | undefined): string {
   if (n < 0.0001) return "<$0.0001";
   if (n < 1) return `$${n.toFixed(4)}`;
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** What a client pays, in dollars: cents above a dollar ($88.60), up to four decimals below ($0.20, $0.0767, $0.0033). */
+export function formatMoney(n: number | null | undefined): string {
+  if (n === null || n === undefined) return "—";
+  if (n === 0) return "$0.00";
+  if (n < 0.0001) return "<$0.0001";
+  if (n < 1) return `$${n.toFixed(4).replace(/0{1,2}$/, "")}`;
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** A call's or a group's charge for a table cell; "≈" when its seconds are approximate. */
+export function formatCharge(charge: UsageCharge | null | undefined): string {
+  if (!charge) return "—";
+  return `${charge.approx ? "≈ " : ""}${formatMoney(charge.usd)}`;
+}
+
+/** "$0.20 a minute · $0.0033 a second" */
+export function rateText(b: UsageBilling): string {
+  return `${formatMoney(b.per_minute)} a minute · ${formatMoney(b.per_second)} a second`;
 }
 
 /** A call's or a group's estimate for a table cell; "≈" when it rests on approximate seconds. */

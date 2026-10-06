@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * What each call used: LLM tokens and Anam seconds, per call, for widget (embedded) calls and for the
- * dashboard's test button. A client sees its own calls; an administrator (the backend's
- * USAGE_ADMIN_EMAILS) can switch to every client's. Numbers come from api/usage.py -- the agent's own
- * record of each Gemini report, and Anam's own record of the session once it has ended.
+ * What each call ran and what it was charged, for widget (embedded) calls and for the dashboard's test
+ * button. A client sees its own calls: how long each ran and the flat charge on that time (US$0.20 a
+ * minute, billed by the second) -- no token counts, no provider's name (Hari, 2026-10-06). An administrator
+ * (the backend's USAGE_ADMIN_EMAILS) can switch to every client's and also sees the language-model tokens
+ * and our estimated cost. Numbers come from api/usage.py.
  *
  * Ditto / FlashHead / Wav2Lip calls are listed with their duration but no tokens: their Gemini session
  * runs on the GPU side, so the backend never sees it.
@@ -16,6 +17,7 @@ import {
   KIND_FILTERS,
   endReasonLabel,
   flagLabel,
+  formatCharge,
   formatCost,
   formatDayRange,
   formatMinutes,
@@ -25,6 +27,7 @@ import {
   kindLabel,
   localDay,
   rangeLastDays,
+  rateText,
   statusBadgeClass,
   statusLabel,
   tzOffsetMinutes,
@@ -55,7 +58,7 @@ const PAGE = 50;
 type AgentOption = { id: string; name: string };
 type Detail = UsageEventRow[] | "loading" | "error";
 
-/** Tokens are only recorded where the brain runs in this backend (the Anam path). */
+/** Tokens are only recorded where the brain runs in this backend (the hosted-avatar path). Administrators' only. */
 const hasTokens = (c: UsageItem) => c.renderer === "anam" && c.source !== "backfill";
 
 export default function UsagePage() {
@@ -150,6 +153,7 @@ export default function UsagePage() {
       return;
     }
     setOpen(call.id);
+    if (!summary?.is_admin) return;                 // the token reports are an administrator's
     if (details[call.id] && details[call.id] !== "error") return;
     setDetails((d) => ({ ...d, [call.id]: "loading" }));
     try {
@@ -191,7 +195,8 @@ export default function UsagePage() {
 
   const totals = summary?.totals;
   const isAdmin = summary?.is_admin ?? false;
-  // Prices are the administrator's: the backend sends no cost to anyone else, and the page asks for none.
+  // Our cost and the token counts are the administrator's: the backend sends neither to anyone else. Every client
+  // gets the call time and the charge.
   const showCost = isAdmin && !!totals?.cost;
   const showClient = scope === "all";
   const groupOptions: { value: GroupBy; label: string }[] = [
@@ -206,7 +211,11 @@ export default function UsagePage() {
       <div className="l-dash-header">
         <span className="l-kicker">Dashboard</span>
         <h1>Usage</h1>
-        <p>What each call used: language-model tokens and Anam seconds, for embedded widgets and the test button.</p>
+        <p>
+          {isAdmin
+            ? "What each call ran, what it was charged and what it used (language-model tokens), for embedded widgets and the test button."
+            : "How long each call ran and what it was charged, for embedded widgets and the test button."}
+        </p>
       </div>
 
       <div className="lu-filters" role="group" aria-label="Filters">
@@ -296,32 +305,42 @@ export default function UsagePage() {
           </p>
 
           {totals ? (
-            <div className={`lu-totals${showCost ? " lu-totals-cost" : ""}`} aria-label="Totals for this period">
+            <div className="lu-totals" aria-label="Totals for this period">
               <Stat label="Calls" value={formatTokens(totals.calls)}
                 sub={[`${totals.completed} completed`, totals.failed ? `${totals.failed} failed` : "",
                   totals.lost ? `${totals.lost} lost` : "", totals.active ? `${totals.active} running` : ""]
                   .filter(Boolean).join(" · ")} warn={totals.failed > 0} />
-              <Stat label="Anam time" value={formatMinutes(totals.anam_seconds)}
-                sub={totals.other_renderer_seconds > 0 ? `+ ${formatSeconds(totals.other_renderer_seconds)} on GPU renderers` : "billed seconds where Anam has reported"} />
-              <Stat label="Input tokens" value={formatTokens(totals.input_tokens)} sub="the whole conversation, each turn" />
-              <Stat label="Output tokens" value={formatTokens(totals.output_tokens)}
-                sub={totals.thought_tokens > 0 ? `+ ${formatTokens(totals.thought_tokens)} thinking` : undefined} />
+              <Stat label="Call time" value={formatMinutes(totals.call_seconds)}
+                sub={isAdmin && (totals.other_renderer_seconds ?? 0) > 0
+                  ? `of which ${formatSeconds(totals.other_renderer_seconds)} on GPU renderers (not priced)` : undefined} />
+              {isAdmin ? <Stat label="Input tokens" value={formatTokens(totals.input_tokens)} sub="the whole conversation, each turn" /> : null}
+              {isAdmin ? (
+                <Stat label="Output tokens" value={formatTokens(totals.output_tokens)}
+                  sub={(totals.thought_tokens ?? 0) > 0 ? `+ ${formatTokens(totals.thought_tokens)} thinking` : undefined} />
+              ) : null}
               <Stat label="Tool calls" value={formatTokens(totals.tool_calls)} />
+              <Stat label="Charge" value={formatCharge(totals.charge)} sub={summary ? rateText(summary.billing) : undefined} />
               {showCost && totals.cost ? (
                 <Stat label="Estimated cost" value={formatCost(totals.cost)}
-                  sub={`Gemini ${formatUsd(totals.cost.llm)} · Anam ${formatUsd(totals.cost.anam)}`} />
+                  sub={`Gemini ${formatUsd(totals.cost.llm)} · Call ${formatUsd(totals.cost.anam)}`} />
               ) : null}
             </div>
           ) : null}
 
-          {showCost && summary?.pricing ? (
+          {summary ? (
             <p className="lu-note" role="note">
-              Estimated cost is at list prices read on {summary.pricing.as_of}: Gemini Live and the cascade&apos;s
-              language model, voice and transcription by the tokens or audio minutes each report counted, thinking
-              as output; Anam at ${summary.pricing.anam_per_minute.toFixed(2)} a minute, billed by the second.
-              GPU renderers (Ditto, FlashHead, Wav2Lip) are not priced. ≈ marks calls from before usage logging,
-              priced from approximate seconds with no model usage.
-              {totals?.cost?.partial ? " Some usage is on a model with no known price and is left out." : ""}
+              Charged at {rateText(summary.billing)} of call time, billed by the second.
+              {totals?.charge.approx || showCost ? " ≈ marks calls from before usage logging, whose length is approximate." : ""}
+              {showCost && summary.pricing ? (
+                <>
+                  {" "}Estimated cost (administrators only) is at list prices read on {summary.pricing.as_of}: Gemini Live
+                  and the cascade&apos;s language model, voice and transcription by the tokens or audio minutes each report
+                  counted, thinking as output; call time at ${summary.pricing.anam_per_minute.toFixed(2)} a minute, billed
+                  by the second. GPU renderers (Ditto, FlashHead, Wav2Lip) are not priced; calls before usage logging are
+                  priced from approximate seconds with no model usage.
+                  {totals?.cost?.partial ? " Some usage is on a model with no known price and is left out." : ""}
+                </>
+              ) : null}
             </p>
           ) : null}
 
@@ -345,9 +364,10 @@ export default function UsagePage() {
                     <tr>
                       <th>{groupOptions.find((g) => g.value === groupBy)?.label}</th>
                       <th className="lu-num">Calls</th>
-                      <th className="lu-num">Anam time</th>
-                      <th className="lu-num">Input</th>
-                      <th className="lu-num">Output</th>
+                      <th className="lu-num">Call time</th>
+                      {isAdmin ? <th className="lu-num">Input</th> : null}
+                      {isAdmin ? <th className="lu-num">Output</th> : null}
+                      <th className="lu-num">Charge</th>
                       {showCost ? <th className="lu-num">Est. cost</th> : null}
                       <th className="lu-num">Failed</th>
                     </tr>
@@ -357,9 +377,10 @@ export default function UsagePage() {
                       <tr key={`${g.key}`}>
                         <td>{groupBy === "kind" && g.key ? kindLabel(g.key) : g.label}</td>
                         <td className="lu-num">{formatTokens(g.calls)}</td>
-                        <td className="lu-num">{formatMinutes(g.anam_seconds)}</td>
-                        <td className="lu-num">{formatTokens(g.input_tokens)}</td>
-                        <td className="lu-num">{formatTokens(g.output_tokens)}</td>
+                        <td className="lu-num">{formatMinutes(g.call_seconds)}</td>
+                        {isAdmin ? <td className="lu-num">{formatTokens(g.input_tokens)}</td> : null}
+                        {isAdmin ? <td className="lu-num">{formatTokens(g.output_tokens)}</td> : null}
+                        <td className="lu-num">{formatCharge(g.charge)}</td>
                         {showCost ? <td className="lu-num">{formatCost(g.cost)}</td> : null}
                         <td className="lu-num">{g.failed + g.lost > 0 ? formatTokens(g.failed + g.lost) : "—"}</td>
                       </tr>
@@ -388,9 +409,10 @@ export default function UsagePage() {
                       <th>Started</th>
                       <th>{showClient ? "Client · Agent" : "Agent"}</th>
                       <th>Type</th>
-                      <th className="lu-num">Anam time</th>
-                      <th className="lu-num">Input</th>
-                      <th className="lu-num">Output</th>
+                      <th className="lu-num">Call time</th>
+                      {isAdmin ? <th className="lu-num">Input</th> : null}
+                      {isAdmin ? <th className="lu-num">Output</th> : null}
+                      <th className="lu-num">Charge</th>
                       {showCost ? <th className="lu-num">Est. cost</th> : null}
                       <th>Status</th>
                     </tr>
@@ -412,14 +434,15 @@ export default function UsagePage() {
                           </td>
                           <td>
                             <span className={`lu-kind lu-kind-${c.kind}`}>{kindLabel(c.kind)}</span>
-                            {c.renderer !== "anam" ? <div className="lu-sub">{c.renderer}</div> : null}
+                            {isAdmin && c.renderer && c.renderer !== "anam" ? <div className="lu-sub">{c.renderer}</div> : null}
                           </td>
                           <td className="lu-num">
-                            {c.renderer === "anam" ? formatSeconds(c.seconds) : formatSeconds(c.renderer_seconds)}
-                            {c.flags.includes("anam_mismatch") ? <div className="lu-sub lu-warn">differs from Anam</div> : null}
+                            {formatSeconds(c.call_seconds)}
+                            {isAdmin && c.flags.includes("anam_mismatch") ? <div className="lu-sub lu-warn">differs from the reported time</div> : null}
                           </td>
-                          <td className="lu-num">{hasTokens(c) ? formatTokens(c.input_tokens) : "—"}</td>
-                          <td className="lu-num">{hasTokens(c) ? formatTokens(c.output_tokens) : "—"}</td>
+                          {isAdmin ? <td className="lu-num">{hasTokens(c) ? formatTokens(c.input_tokens) : "—"}</td> : null}
+                          {isAdmin ? <td className="lu-num">{hasTokens(c) ? formatTokens(c.output_tokens) : "—"}</td> : null}
+                          <td className="lu-num">{formatCharge(c.charge)}</td>
                           {showCost ? <td className="lu-num">{formatCost(c.cost)}</td> : null}
                           <td>
                             <span className={`l-status-badge ${statusBadgeClass(c.status)}`}>{statusLabel(c.status)}</span>
@@ -427,7 +450,9 @@ export default function UsagePage() {
                         </tr>
                         {open === c.id ? (
                           <tr className="lu-detail-row">
-                            <td colSpan={showCost ? 8 : 7}><CallDetail call={c} events={details[c.id]} showCost={showCost} /></td>
+                            <td colSpan={6 + (isAdmin ? 2 : 0) + (showCost ? 1 : 0)}>
+                              <CallDetail call={c} events={details[c.id]} showCost={showCost} isAdmin={isAdmin} />
+                            </td>
                           </tr>
                         ) : null}
                       </Fragment>
@@ -461,40 +486,46 @@ function Stat({ label, value, sub, warn }: { label: string; value: string; sub?:
   );
 }
 
-function CallDetail({ call, events, showCost }: { call: UsageItem; events: Detail | undefined; showCost: boolean }) {
-  const tokens = hasTokens(call);
+function CallDetail({ call, events, showCost, isAdmin }: {
+  call: UsageItem;
+  events: Detail | undefined;
+  showCost: boolean;
+  isAdmin: boolean;
+}) {
+  const tokens = isAdmin && hasTokens(call);
   return (
     <div className="lu-detail">
       <dl className="lu-facts">
         {showCost && call.cost ? (
-          <div><dt>Estimated cost</dt><dd>{formatCost(call.cost)} <span className="lu-sub">(Gemini {formatUsd(call.cost.llm)} · Anam {formatUsd(call.cost.anam)})</span>
+          <div><dt>Estimated cost</dt><dd>{formatCost(call.cost)} <span className="lu-sub">(Gemini {formatUsd(call.cost.llm)} · Call {formatUsd(call.cost.anam)})</span>
             {call.cost.partial ? <div className="lu-sub lu-warn">some usage has no known price</div> : null}</dd></div>
         ) : null}
+        <div><dt>Charge</dt><dd>{formatCharge(call.charge)} <span className="lu-sub">({formatSeconds(call.call_seconds)} of call time)</span></dd></div>
         <div><dt>How it ended</dt><dd>{call.status === "active" ? "Still running" : endReasonLabel(call.end_reason)}</dd></div>
         <div><dt>Call length</dt><dd>{formatSeconds(call.duration_seconds)}</dd></div>
-        {call.renderer === "anam" ? (
+        {isAdmin && call.renderer === "anam" ? (
           <>
-            <div><dt>Anam time (ours)</dt><dd>{formatSeconds(call.renderer_seconds)}</dd></div>
-            <div><dt>Anam time (billed)</dt><dd>{call.anam_seconds_billed === null ? "not reported yet" : formatSeconds(call.anam_seconds_billed)}</dd></div>
+            <div><dt>Call time (ours)</dt><dd>{formatSeconds(call.renderer_seconds)}</dd></div>
+            <div><dt>Call time (billed)</dt><dd>{call.anam_seconds_billed == null ? "not reported yet" : formatSeconds(call.anam_seconds_billed)}</dd></div>
           </>
-        ) : (
+        ) : isAdmin ? (
           <div><dt>Renderer time</dt><dd>{formatSeconds(call.renderer_seconds)}</dd></div>
-        )}
+        ) : null}
         <div><dt>Pipeline</dt><dd>{call.pipeline === "cascade" ? "Cascade" : "Gemini Live"}{call.model ? ` · ${call.model.replace("models/", "")}` : ""}</dd></div>
         <div><dt>Voice</dt><dd>{call.voice ?? "—"}</dd></div>
         {call.origin ? <div><dt>Page</dt><dd>{call.origin}</dd></div> : null}
-        {tokens ? (
+        {isAdmin && tokens ? (
           <>
             <div><dt>Input</dt><dd>{formatTokens(call.input_tokens)} <span className="lu-sub">({formatTokens(call.input_audio_tokens)} audio)</span></dd></div>
             <div><dt>Output</dt><dd>{formatTokens(call.output_tokens)} <span className="lu-sub">({formatTokens(call.output_audio_tokens)} audio)</span></dd></div>
             <div><dt>Thinking</dt><dd>{formatTokens(call.thought_tokens)}</dd></div>
             <div><dt>Responses · tools</dt><dd>{call.generations} · {call.tool_calls}</dd></div>
           </>
-        ) : (
+        ) : isAdmin ? (
           <div><dt>Tokens</dt><dd>{call.source === "backfill" ? "not recorded (before usage logging)" : "not recorded: this renderer's brain runs on the GPU side"}</dd></div>
-        )}
+        ) : null}
       </dl>
-      {call.error ? <div className="lu-error lu-error-inline" role="note">{call.error}</div> : null}
+      {isAdmin && call.error ? <div className="lu-error lu-error-inline" role="note">{call.error}</div> : null}
       {call.flags.length > 0 ? (
         <div className="lu-flags">{call.flags.map((f) => <span key={f} className="lu-flag">{flagLabel(f)}</span>)}</div>
       ) : null}

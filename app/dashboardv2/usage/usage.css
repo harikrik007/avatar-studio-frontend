@@ -112,7 +112,7 @@
 /* totals */
 .landing .lu-totals {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 28px;
 }
@@ -150,18 +150,6 @@
 }
 
 /* an administrator also sees the estimated cost: a sixth card, which needs room, so three across until wide */
-@media (min-width: 901px) and (max-width: 1279px) {
-  .landing .lu-totals.lu-totals-cost {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1280px) {
-  .landing .lu-totals.lu-totals-cost {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
-}
-
 .landing .lu-note {
   color: var(--l-muted);
   font-size: var(--l-fs-helper);

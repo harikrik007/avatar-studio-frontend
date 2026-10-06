@@ -156,7 +156,7 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
 
       {!runsHere ? (
         <p className="lb-note" role="note">
-          Tools run on Anam avatars for now. On this avatar they are saved with the agent but not used in calls yet.
+          Tools are not available on this avatar yet. They are saved with the agent but not used in calls.
         </p>
       ) : null}
 
