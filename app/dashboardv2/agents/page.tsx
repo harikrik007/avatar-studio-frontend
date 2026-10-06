@@ -24,24 +24,43 @@ export default function AgentsPage() {
   // Distinguishes "still loading" from "genuinely empty" -- the empty state
   // used to flash on every page load before the first fetch resolved.
   const [loaded, setLoaded] = useState(false);
+  const [avatarsLoaded, setAvatarsLoaded] = useState(false);
 
-  const refresh = useCallback(async () => {
-    const [agentsRes, avatarsRes] = await Promise.all([fetch("/api/agents"), fetch("/api/avatars")]);
-    if (agentsRes.ok) setAgents(await agentsRes.json());
-    if (avatarsRes.ok) setAvatars(await avatarsRes.json());
+  // The two lists load independently: the agents are quick, the avatar list can be slow (it once
+  // took a minute), and the rows must not wait for it -- their thumbnails fill in when it arrives.
+  // The list never shows a system prompt, so the lean form is asked for.
+  const loadAgents = useCallback(async () => {
+    try {
+      const res = await fetch("/api/agents?summary=true");
+      if (res.ok) setAgents(await res.json());
+    } catch {
+      // keep what is on screen; the next poll or reload tries again
+    }
     setLoaded(true);
   }, []);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  const loadAvatars = useCallback(async () => {
+    try {
+      const res = await fetch("/api/avatars");
+      if (res.ok) setAvatars(await res.json());
+    } catch {
+      // thumbnails stay as placeholders
+    }
+    setAvatarsLoaded(true);
+  }, []);
 
-  // Status is server-derived; a provisioning agent is polled until it settles.
+  useEffect(() => {
+    void loadAgents();
+    void loadAvatars();
+  }, [loadAgents, loadAvatars]);
+
+  // Status is server-derived; a provisioning agent is polled until it settles. Only the agents are
+  // polled: the avatar list does not change while one provisions.
   useEffect(() => {
     if (!agents.some((a) => a.status === "provisioning")) return;
-    const interval = setInterval(refresh, 3000);
+    const interval = setInterval(loadAgents, 3000);
     return () => clearInterval(interval);
-  }, [agents, refresh]);
+  }, [agents, loadAgents]);
 
   // The hosted catalogue (see HOSTED_PROVIDERS): shared, always ready, nothing to create.
   const readyAvatars = avatars.filter((a) => HOSTED_PROVIDERS.has(a.provider ?? "") && a.status === "ready");
@@ -56,7 +75,9 @@ export default function AgentsPage() {
 
       <FlowRail hasAgent={agents.length > 0} hasLiveAgent={agents.some((a) => a.status === "live")} />
 
-      {!loaded ? (
+      {/* Agents show as soon as they arrive. The empty state alone also needs the avatars (it says
+          whether there is anything to build on), so only that case waits for them. */}
+      {!loaded || (agents.length === 0 && !avatarsLoaded) ? (
         <SkeletonRows />
       ) : agents.length === 0 ? (
         <div className="l-empty-state">
@@ -90,7 +111,7 @@ export default function AgentsPage() {
           </div>
           <div className="l-avatar-list">
             {agents.map((agent) => (
-              <AgentRow key={agent.id} agent={agent} avatars={avatars} />
+              <AgentRow key={agent.id} agent={agent} avatars={avatars} avatarsLoaded={avatarsLoaded} />
             ))}
           </div>
         </>
@@ -99,7 +120,7 @@ export default function AgentsPage() {
   );
 }
 
-function AgentRow({ agent, avatars }: { agent: Agent; avatars: Avatar[] }) {
+function AgentRow({ agent, avatars, avatarsLoaded }: { agent: Agent; avatars: Avatar[]; avatarsLoaded: boolean }) {
   const avatar = avatars.find((a) => a.id === agent.avatar_id);
   return (
     <Link href={`/dashboardv2/agents/${agent.id}`} className="l-avatar-row" style={{ textDecoration: "none", color: "inherit" }}>
@@ -112,7 +133,7 @@ function AgentRow({ agent, avatars }: { agent: Agent; avatars: Avatar[] }) {
         <div className="l-avatar-info">
           <div className="l-avatar-name">{agent.name}</div>
           <div className="l-avatar-meta">
-            {avatar ? avatar.name : "Unknown avatar"} — {agent.tools_json.length} tool
+            {avatar ? avatar.name : avatarsLoaded ? "Unknown avatar" : "…"} — {agent.tools_json.length} tool
             {agent.tools_json.length === 1 ? "" : "s"}
             {agent.documents?.length
               ? ` · ${agent.documents.length} knowledge file${agent.documents.length === 1 ? "" : "s"}`

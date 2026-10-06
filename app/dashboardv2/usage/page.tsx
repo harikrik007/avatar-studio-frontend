@@ -122,7 +122,7 @@ export default function UsagePage() {
 
   useEffect(() => {
     void (async () => {
-      const res = await fetch("/api/agents");
+      const res = await fetch("/api/agents?summary=true");
       if (res.ok) {
         const list: { id: string; name: string }[] = await res.json();
         setAgents(list.map((a) => ({ id: a.id, name: a.name })));
