@@ -1689,6 +1689,16 @@
   aspect-ratio: 16 / 11;
 }
 
+/* The call stays the size of the idle picture: the video fills the box (cover) instead of sizing it. In normal flow a video
+   taller than the box -- a portrait render -- stretched the box to its own height and the whole preview grew down the page. */
+.landing .lb-preview .l-live-test-video-wrap {
+  overflow: hidden;
+}
+.landing .lb-preview .l-live-test-video {
+  position: absolute;
+  inset: 0;
+}
+
 .landing .lb-preview .l-live-test-bar {
   padding: 10px 14px;
   border-bottom: none;

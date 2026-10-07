@@ -412,6 +412,8 @@ function PreviewPanel({
               key={testMode}
               agentId={f.agent.id}
               pipeline={testMode === "cascade" ? "cascade" : undefined}
+              // the preview box is landscape, like the idle picture: ask for the landscape render so the call fills it the same way
+              frame="wide"
               stopLabel="End call"
               stopClassName="lb-btn-endcall"
               onStopped={() => setTestMode(null)}

@@ -17,8 +17,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // ?pipeline=cascade: the test-only cascaded voice pipeline (VAD -> speech-
   // to-text -> LLM -> TTS) instead of Gemini Live; stopped/polled through the
   // same GET/DELETE below.
-  const cascade = new URL(request.url).searchParams.get("pipeline") === "cascade";
-  const res = await fetch(`${API_URL}/agents/${id}/${cascade ? "cascade-test-session" : "test-session"}`, {
+  const search = new URL(request.url).searchParams;
+  const cascade = search.get("pipeline") === "cascade";
+  // ?frame=wide: the landscape render, for a preview box that is landscape. Only this one value is passed on.
+  const frame = search.get("frame") === "wide" ? "?frame=wide" : "";
+  const res = await fetch(`${API_URL}/agents/${id}/${cascade ? "cascade-test-session" : "test-session"}${frame}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${API_TOKEN}`,

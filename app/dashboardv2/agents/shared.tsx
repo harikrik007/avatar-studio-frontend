@@ -149,6 +149,7 @@ export function LiveTestPanel({
   agentId,
   onStopped,
   pipeline,
+  frame,
   stopLabel = "Stop test",
   stopClassName = "l-btn l-btn-ghost",
 }: {
@@ -157,6 +158,8 @@ export function LiveTestPanel({
   // "cascade": the test-only VAD -> speech-to-text -> LLM -> TTS pipeline
   // instead of Gemini Live (see the backend's cascade-test-session).
   pipeline?: "cascade";
+  // "wide": ask for the landscape render (1152x768), for a landscape preview box, instead of the portrait default.
+  frame?: "wide";
   // The builder's preview calls it "End call" and styles it red.
   stopLabel?: string;
   stopClassName?: string;
@@ -237,7 +240,10 @@ export function LiveTestPanel({
       await pendingRef.current.catch(() => {});
       if (cancelled) return;
 
-      const query = pipeline === "cascade" ? "?pipeline=cascade" : "";
+      const params = new URLSearchParams();
+      if (pipeline === "cascade") params.set("pipeline", "cascade");
+      if (frame === "wide") params.set("frame", "wide");
+      const query = params.size ? `?${params}` : "";
       const res = await fetch(`/api/agents/${agentId}/test-session${query}`, { method: "POST" });
       const body = await res.json().catch(() => ({}));
       if (cancelled) return;
@@ -347,7 +353,7 @@ export function LiveTestPanel({
       pendingRef.current = pendingRef.current.catch(() => {}).then(teardown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId, pipeline]);
+  }, [agentId, pipeline, frame]);
 
   // Unhappy-path backstop while "warming": if RunPod's own job status comes
   // back FAILED, surface that instead of leaving the customer staring at
