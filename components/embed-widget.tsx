@@ -430,7 +430,12 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             setErrorMessage(message);
           },
         },
-        { sessionUrl: "/api/embed/session", sessionBody: { public_key: publicKey, origin } }
+        {
+          sessionUrl: "/api/embed/session",
+          // A frameless avatar floats on the host page with nothing around her, so she gets the landscape render: the idle still's own
+          // shape, with the shoulders whole. The portrait render is only 768 px wide and cuts them off at hard vertical edges.
+          sessionBody: { public_key: publicKey, origin, ...(transparent ? { frame: "wide" } : {}) },
+        }
       );
 
       setMessages([]);
@@ -909,20 +914,24 @@ const framelessStageStyle: React.CSSProperties = {
 };
 
 const framelessCanvasStyle: React.CSSProperties = {
-  height: "100%",
+  // Two thirds of the shell's height, which is what 768 of the old portrait render's 1152 rows come to: she stays exactly the size she
+  // was on the host page (the frame is sized for it), and only what is cut off changes -- the picture now ends at the chest, with the
+  // shoulders whole, instead of running on down to the waist with the shoulders cut off at the sides.
+  height: "66.667%",
   // Pinned, not auto: the canvas's own backing buffer is whatever the
-  // current source is -- square (1152x1152) for the idle still, portrait
-  // (768x1152) for Anam's live render -- and at width:auto the CSS box
-  // followed that shape directly, so the instant a session connected the
-  // whole box changed width and she visibly jumped sideways. aspectRatio
-  // fixes the box to the live render's own shape regardless of which
-  // source is actually drawn; objectFit:cover then fills that fixed box
-  // from either source without distorting it, cropping the idle still's
-  // extra width the same way object-fit already does for the panel
-  // widget's video element.
-  aspectRatio: "768 / 1152",
+  // current source is -- the idle still or Anam's live render, both landscape
+  // (1152x768) now -- and at width:auto the CSS box followed whichever shape
+  // was being drawn, so a source of another shape made the whole box change
+  // width and she visibly jumped sideways. aspectRatio fixes the box to the
+  // live render's own shape regardless of which source is actually drawn;
+  // objectFit:cover then fills that fixed box from either source without
+  // distorting it.
+  aspectRatio: "1152 / 768",
   objectFit: "cover",
   display: "block",
+  // The picture is 3:2 but she fills only its middle two thirds (about 17% of transparent green each side). Her right edge belongs on
+  // the frame's edge, so the right margin hangs outside the shell (which clips it) and the left one lies under the chat column.
+  transform: "translateX(16.2%)",
   // What makes her stand on the page rather than sit on top of it.
   filter: "drop-shadow(0 24px 34px rgba(0,0,0,0.34))",
 };
@@ -931,10 +940,10 @@ const framelessLeftStyle: React.CSSProperties = {
   position: "absolute",
   left: 0,
   bottom: 0,
-  // Whatever the avatar leaves free, not a fixed share. Her box is pinned to
-  // 2:3 at the full height of the shell (see framelessCanvasStyle), so it is
-  // always 66.667vh wide -- a flat 62% ran well past the free space on a
-  // 760x620 frame and put the chat on top of her. Still capped at 62% for a
+  // Whatever the avatar leaves free, not a fixed share. She herself (not her
+  // picture's transparent margins, which the chat may lie over) is as wide as
+  // her picture is tall, 66.667vh (see framelessCanvasStyle) -- a flat 62% ran
+  // well past the free space on a 760x620 frame and put the chat on top of her. Still capped at 62% for a
   // wide, short frame, and floored so a very narrow one keeps a usable column
   // even though it can no longer avoid her entirely.
   width: "min(62%, max(200px, calc(100% - 66.667vh - 8px)))",
