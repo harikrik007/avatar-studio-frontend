@@ -8,7 +8,6 @@ import EmbedSection from "@/components/landing/EmbedSection";
 import HeroCall from "@/components/landing/HeroCall";
 import SiteFooter from "@/components/landing/SiteFooter";
 import SiteHeader from "@/components/landing/SiteHeader";
-import StickyTalk from "@/components/landing/StickyTalk";
 import TalkButton from "@/components/landing/TalkButton";
 import UseCases from "@/components/landing/UseCases";
 import step1 from "@/components/landing/img/step-1.webp";
@@ -251,7 +250,6 @@ export default async function LandingPage() {
       </main>
 
       <SiteFooter />
-      {first ? <StickyTalk name={first.name} personaKey={first.key} /> : null}
     </div>
   );
 }
