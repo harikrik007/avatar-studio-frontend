@@ -83,10 +83,19 @@ export type Agent = {
 
 export const DOC_EXTENSIONS = ".pdf,.txt,.md,.csv,.docx";
 
-// Avatars offered in this dashboard: Anam's hosted faces plus the engines we
-// host ourselves on the GPU box (ditto-avatar-pipeline,
-// flashhead-avatar-pipeline) -- none has anything for a client to create.
-export const HOSTED_PROVIDERS = new Set(["anam", "ditto", "flashhead"]);
+// Avatars offered in this dashboard. PRODUCTION OFFERS ANAM ONLY (Hari, 2026-10-07): Ditto, FlashHead and any
+// avatar provider we build next are developed on the `development` branch and served locally to Hari for testing,
+// never offered to a production visitor. The list is configuration, not code, so the same code is on both branches
+// and a merge can never carry a provider into production: it is "anam" unless NEXT_PUBLIC_AVATAR_PROVIDERS says
+// otherwise, and only a local .env.local sets it, e.g. NEXT_PUBLIC_AVATAR_PROVIDERS=anam,ditto,flashhead
+// (Railway has no such variable). It is read at build time. Agents already built on another provider keep working;
+// they are just not offered in the picker.
+export const HOSTED_PROVIDERS = new Set(
+  (process.env.NEXT_PUBLIC_AVATAR_PROVIDERS || "anam")
+    .split(",")
+    .map((p) => p.trim().toLowerCase())
+    .filter(Boolean)
+);
 
 export function agentStatusLabel(status: Agent["status"]): string {
   if (status === "live") return "Live";
