@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Track, type RemoteTrack } from "livekit-client";
+// Types only: nothing here needs the calling library at run time (a track's kind is the string "audio" or "video"), so the landing
+// page can draw the keyed still without loading LiveKit, which it loads only when someone starts a call.
+import type { RemoteTrack } from "livekit-client";
 
 /**
  * Keys the avatar's green background out, on the GPU, so it can float on a
@@ -42,6 +44,9 @@ type Props = {
   idleImageSrc?: string | null;
   className?: string;
   style?: React.CSSProperties;
+  /** Called once, when the first keyed picture (the still or a live frame) is on the canvas, so a page can fade the face in
+   * instead of showing an empty box. */
+  onFirstDraw?: () => void;
 };
 
 // Anam's defaults. Named rather than inlined because tuning these is the
@@ -120,7 +125,13 @@ function compile(gl: WebGLRenderingContext, type: number, source: string) {
   return shader;
 }
 
-export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleImageSrc, className, style }: Props) {
+export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleImageSrc, className, style, onFirstDraw }: Props) {
+  const onFirstDrawRef = useRef(onFirstDraw);
+  onFirstDrawRef.current = onFirstDraw;
+  const drawnOnceRef = useRef(false);
+  // The still only needs drawing when it arrives, and once more when a live video ends; redrawing an unchanged picture sixty times a
+  // second would keep a visitor's phone busy for nothing. A live frame is always drawn.
+  const stillDirtyRef = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -135,7 +146,7 @@ export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleIm
   // attach() builds the <audio> element and wires autoplay for us.
   // Attaching to our own element produced a silent track there too.
   useEffect(() => {
-    if (!audioTrack || audioTrack.kind !== Track.Kind.Audio) return;
+    if (!audioTrack || (audioTrack.kind as string) !== "audio") return;
     const element = audioTrack.attach() as HTMLAudioElement;
     element.dataset.avatarAudio = "true";
     element.autoplay = true;
@@ -169,14 +180,17 @@ export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleIm
     }
     const img = new Image();
     img.crossOrigin = "anonymous"; // a tainted canvas cannot be drawn from
-    img.onload = () => { imageRef.current = img; };
+    img.onload = () => {
+      imageRef.current = img;
+      stillDirtyRef.current = true;
+    };
     img.src = idleImageSrc;
     return () => { imageRef.current = null; };
   }, [idleImageSrc]);
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !videoTrack || videoTrack.kind !== Track.Kind.Video) return;
+    if (!video || !videoTrack || (videoTrack.kind as string) !== "video") return;
     videoTrack.attach(video);
     return () => { videoTrack.detach(video); };
   }, [videoTrack]);
@@ -239,6 +253,9 @@ export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleIm
       const hasFrame = live && live.readyState >= 2 && live.videoWidth > 0;
       const source: TexImageSource | null = hasFrame ? live : imageRef.current;
       if (!source) return;
+      if (hasFrame) stillDirtyRef.current = true;     // when the live video ends, the still is drawn once again
+      else if (!stillDirtyRef.current) return;        // an unchanged still: nothing to do this frame
+      else stillDirtyRef.current = false;
 
       const w = hasFrame ? live!.videoWidth : (source as HTMLImageElement).naturalWidth;
       const h = hasFrame ? live!.videoHeight : (source as HTMLImageElement).naturalHeight;
@@ -257,6 +274,10 @@ export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleIm
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
+      if (!drawnOnceRef.current) {
+        drawnOnceRef.current = true;
+        onFirstDrawRef.current?.();
+      }
     };
     draw();
 

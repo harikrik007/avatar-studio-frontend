@@ -13,12 +13,14 @@ export type LandingPersona = {
   role: string;
   /** one sentence on what to ask it; may be empty */
   blurb: string;
+  /** the face is a green-screen picture: the page keys the green out so she floats over the card */
+  greenScreen: boolean;
 };
 
 const API_URL = process.env.AVATAR_STUDIO_API_URL || "http://127.0.0.1:8095";
 const API_TOKEN = process.env.AVATAR_STUDIO_API_TOKEN || "";
 
-/** The published personas, or none when the backend cannot be reached (the page then shows its built-in demos). Cached for a minute. */
+/** The published personas, or none when the backend cannot be reached (the page then shows its resting card). Cached for a minute. */
 export async function fetchLandingPersonas(): Promise<LandingPersona[]> {
   try {
     const res = await fetch(`${API_URL}/public/personas`, {
@@ -37,6 +39,7 @@ export async function fetchLandingPersonas(): Promise<LandingPersona[]> {
           name: p.name.trim(),
           role: typeof p.role === "string" ? p.role.trim() : "",
           blurb: typeof p.blurb === "string" ? p.blurb.trim() : "",
+          greenScreen: p.green_screen === true,
         });
       }
     }

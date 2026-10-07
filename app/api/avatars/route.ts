@@ -37,36 +37,3 @@ export async function GET() {
 
   return NextResponse.json(body, { status: res.status });
 }
-
-export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.clientId) {
-    return NextResponse.json({ error: "Not signed in." }, { status: 401 });
-  }
-
-  const incoming = await request.formData();
-  const file = incoming.get("file");
-  const name = incoming.get("name");
-
-  if (!(file instanceof File) || typeof name !== "string" || !name.trim()) {
-    return NextResponse.json({ error: "Missing file or name." }, { status: 400 });
-  }
-
-  // Backend expects `name` as a multipart form field (FastAPI Form(...)),
-  // not a query param -- it can't be a bare query param alongside a File
-  // param in the same endpoint.
-  const outgoing = new FormData();
-  outgoing.set("name", name);
-  outgoing.set("file", file, file.name);
-
-  const res = await fetch(`${API_URL}/avatars`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${API_TOKEN}`,
-      "X-Avatar-Studio-Client-Id": session.clientId,
-    },
-    body: outgoing,
-  });
-  const body = await res.json();
-  return NextResponse.json(body, { status: res.status });
-}

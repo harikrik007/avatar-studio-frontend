@@ -108,13 +108,21 @@ export class AvatarSession {
     room.on(RoomEvent.Disconnected, (reason) => callbacks.onDisconnected(String(reason ?? "")));
 
     await room.connect(payload.url, payload.token);
-    // The agent transcribes our speech server-side; barge-in is handled there
-    // too, so the mic simply stays open for the whole session.
-    await room.localParticipant.setMicrophoneEnabled(true);
-    // Browsers block audio elements that were not started by a gesture. This
-    // runs inside the click that called connect(), so it normally succeeds;
-    // if it does not, canPlaybackAudio stays false and the UI offers a retry.
-    await session.startAudio();
+    try {
+      // The agent transcribes our speech server-side; barge-in is handled there
+      // too, so the mic simply stays open for the whole session.
+      await room.localParticipant.setMicrophoneEnabled(true);
+      // Browsers block audio elements that were not started by a gesture. This
+      // runs inside the click that called connect(), so it normally succeeds;
+      // if it does not, canPlaybackAudio stays false and the UI offers a retry.
+      await session.startAudio();
+    } catch (error) {
+      // A blocked or missing microphone lands here after the room is already joined. Nothing owns that room yet (no session is
+      // returned), so leave it rather than hold a seat open; listeners go first so the caller's own error is the only thing shown.
+      room.removeAllListeners();
+      void room.disconnect();
+      throw error;
+    }
     return session;
   }
 

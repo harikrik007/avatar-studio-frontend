@@ -4,9 +4,10 @@ import { auth } from "@/auth";
 // Google login is the only gate now -- the shared-password layer from the
 // early pitch build is gone (it predates real per-user accounts and was
 // causing real friction on mobile). /, /pricing, /login, and NextAuth's
-// own routes stay public; /onboarding needs a session but not yet a
-// company_name (that's what it's collecting); everything else needs both.
-const PUBLIC_PATHS = new Set(["/", "/pricing"]);
+// own routes stay public (and the site icon and share image they point at);
+// /onboarding needs a session but not yet a company_name (that's what it's
+// collecting); everything else needs both.
+const PUBLIC_PATHS = new Set(["/", "/pricing", "/icon.svg", "/opengraph-image.png", "/opengraph-image.alt.txt"]);
 const ONBOARDING_PATHS = new Set(["/onboarding", "/api/onboarding"]);
 
 const API_URL = process.env.AVATAR_STUDIO_API_URL || "http://127.0.0.1:8095";
@@ -84,11 +85,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   if (pathname === "/avatar-idle-loop.webm" || pathname.endsWith("-idle-loop.webm")) {
-    // LiveKitFace's idle placeholder clips (the generic default plus each
-    // demo avatar's own, e.g. pizza-idle-loop.webm) -- rendered inside both
-    // the public /embed/[key] iframe and this landing page's own
-    // unauthenticated "try it live" section, so like widget.js above these
-    // need no session. Confirmed as a real, silent bug: this exact asset
+    // LiveKitFace's idle placeholder clip (avatar-idle-loop.webm) -- rendered
+    // inside the public /embed/[key] iframe, so like widget.js above it
+    // needs no session. Confirmed as a real, silent bug: this exact asset
     // never had a bypass (or even existed as a file) until it was added
     // here, so every video tag pointed at it was actually loading a 307
     // redirect to /login's HTML, not a video -- rendered as a blank box.
