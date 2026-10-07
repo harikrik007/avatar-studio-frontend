@@ -1548,6 +1548,32 @@
   top: 0;
 }
 
+/* Above the test frame while there are unsaved edits: the test call uses the saved agent. Same red as .lb-banner. */
+.landing .lb-preview-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.landing .lb-preview-banner-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.landing .lb-preview-banner strong {
+  display: block;
+  color: #fecaca;
+  font-weight: 600;
+}
+
 .landing .lb-preview {
   position: relative;
   aspect-ratio: 16 / 11;

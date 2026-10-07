@@ -387,6 +387,25 @@ function PreviewPanel({
   return (
     <aside className="lb-right">
       <div className="lb-preview-wrap">
+        {/* A test call is built from the SAVED agent (the backend reads it from the database when the call starts), so
+            edits that are not saved yet are not in it. Say so above the frame, where the call is. Only when there is a
+            saved agent to test: a new agent has no test call yet. */}
+        {canTest && f.dirty ? (
+          <div className="lb-preview-banner" role="status">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" className="lb-preview-banner-icon">
+              <path d="M8 1.5 15 14H1L8 1.5Z" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+              <path d="M8 6.2v3.6M8 11.6v.1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            <div>
+              <strong>Unsaved changes</strong>
+              <span>
+                {testMode
+                  ? "These changes are not part of the call in progress. Save them, then end this call and start a new one to test them."
+                  : "Test calls use the last saved version of this agent. Save your changes to include them in your test."}
+              </span>
+            </div>
+          </div>
+        ) : null}
         <div className={`lb-preview${checker ? " lb-preview-checker" : ""}${testMode ? " lb-preview-live" : ""}`}>
           {testMode && f.agent ? (
             <LiveTestPanel
