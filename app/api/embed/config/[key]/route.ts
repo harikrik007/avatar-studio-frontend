@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicOrigin, stillVersion } from "@/lib/embed-still";
 
 const API_URL = process.env.AVATAR_STUDIO_API_URL || "http://127.0.0.1:8095";
 const API_TOKEN = process.env.AVATAR_STUDIO_API_TOKEN || "";
@@ -26,11 +27,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
     return NextResponse.json({ error: "Unknown widget key." }, { status: res.status });
   }
   const config = await res.json();
+  // A frameless widget keys the still on a canvas, which needs the picture served with CORS open; Anam's image
+  // host does not send it, so the picture is handed over from our own origin (see app/api/embed/still). The URL
+  // is absolute: widget.js on a customer's page, whatever version of it is cached there, loads it as it is.
+  // A panel widget just shows the picture and keeps loading it from where it is.
+  const upstream: string | null = config.preview_image_url ?? null;
+  const previewImageUrl =
+    upstream && config.transparent
+      ? `${publicOrigin(request)}/api/embed/still/${encodeURIComponent(key)}?v=${stillVersion(upstream)}`
+      : upstream;
   return NextResponse.json(
     {
       accent_color: config.accent_color,
       greeting_label: config.greeting_label,
-      preview_image_url: config.preview_image_url ?? null,
+      preview_image_url: previewImageUrl,
       // widget.js needs this before it creates the panel: a frameless
       // widget is a different shape with no background at all.
       transparent: config.transparent ?? false,
