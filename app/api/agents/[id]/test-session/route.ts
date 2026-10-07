@@ -19,8 +19,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // same GET/DELETE below.
   const search = new URL(request.url).searchParams;
   const cascade = search.get("pipeline") === "cascade";
-  // ?frame=wide: the landscape render, for a preview box that is landscape. Only this one value is passed on.
-  const frame = search.get("frame") === "wide" ? "?frame=wide" : "";
+  // ?frame=wide | portrait: the render for the preview box's shape. Only these two values are passed on.
+  const requested = search.get("frame");
+  const frame = requested === "wide" || requested === "portrait" ? `?frame=${requested}` : "";
   const res = await fetch(`${API_URL}/agents/${id}/${cascade ? "cascade-test-session" : "test-session"}${frame}`, {
     method: "POST",
     headers: {

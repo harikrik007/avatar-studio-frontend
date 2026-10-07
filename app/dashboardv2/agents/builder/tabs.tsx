@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VOICE_CATALOG, VOICE_FILTERS, matchesVoiceFilter, voiceName, type VoiceFilter } from "@/lib/voices";
 import type { ClientTool, Tool } from "@/lib/tools/model";
-import { DOC_EXTENSIONS, formatDocMeta, type AgentDocument, type Avatar } from "../shared";
+import { DOC_EXTENSIONS, formatDocMeta, type AgentDocument, type Avatar, type Orientation } from "../shared";
 import type { AgentForm } from "../useAgentForm";
 import PromptDialog from "./PromptDialog";
 import { ExpandIcon } from "./tools/icons";
@@ -335,6 +335,11 @@ function PendingKnowledge({ files, onChange }: { files: File[]; onChange: (files
 /* AVATAR                                                             */
 /* ------------------------------------------------------------------ */
 
+const ORIENTATIONS: { value: Orientation; label: string; help: string }[] = [
+  { value: "portrait", label: "Portrait", help: "A tall card: head and upper body." },
+  { value: "landscape", label: "Landscape", help: "A wide frame: the shoulders whole." },
+];
+
 export function AvatarTab({ f }: { f: AgentForm }) {
   const [query, setQuery] = useState("");
   const shown = f.pickable.filter((a) => a.name.toLowerCase().includes(query.trim().toLowerCase()));
@@ -390,6 +395,30 @@ export function AvatarTab({ f }: { f: AgentForm }) {
           </div>
         }
       >
+        <div className="lb-orient" role="radiogroup" aria-label="Orientation">
+          {ORIENTATIONS.map((o) => {
+            const on = f.form.orientation === o.value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                className={`lb-orient-opt${on ? " lb-orient-on" : ""}`}
+                onClick={() => f.update("orientation", o.value)}
+              >
+                <span className={`lb-orient-icon lb-orient-icon-${o.value}`} aria-hidden="true" />
+                <span className="lb-orient-text">
+                  <span className="lb-orient-label">{o.label}</span>
+                  <span className="lb-orient-help">{o.help}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="lb-help" style={{ margin: "0 0 10px" }}>
+          How the avatar is shown in the widget on your site, and in the preview on the right.
+        </p>
         {f.form.transparent && !keyable ? (
           <p className="lb-warn">
             {selected?.name ? `"${selected.name}"` : "This avatar"} wasn&apos;t shot against a green screen, so

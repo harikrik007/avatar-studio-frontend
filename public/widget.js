@@ -294,6 +294,16 @@
   var PANEL_H = 560;
   var PANEL_W_BIG = 420;
   var PANEL_H_BIG = 680;
+  // The landscape card (Display mode "landscape" in the builder): the 1152x768 render's own 3:2, same idea bigger when
+  // expanded. PANEL_W_LANDSCAPE must match CARD_W_LANDSCAPE in components/embed-widget.tsx.
+  var PANEL_W_LANDSCAPE = 540;
+  var PANEL_H_LANDSCAPE = 360;
+  var PANEL_W_LANDSCAPE_BIG = 780;
+  var PANEL_H_LANDSCAPE_BIG = 520;
+  // Set from the config fetch, like frameless.
+  var landscape = false;
+  function panelW() { return expanded ? (landscape ? PANEL_W_LANDSCAPE_BIG : PANEL_W_BIG) : (landscape ? PANEL_W_LANDSCAPE : PANEL_W); }
+  function panelH() { return expanded ? (landscape ? PANEL_H_LANDSCAPE_BIG : PANEL_H_BIG) : (landscape ? PANEL_H_LANDSCAPE : PANEL_H); }
   // Half the height it launched at (620): the avatar fills the frame's
   // height, so this is what sets her size on the host page. Width is her
   // 2:3 box (~207px) plus the chat column beside her at its old width.
@@ -307,8 +317,8 @@
     panelWrap.style.cssText =
       "position:fixed;" + (frameless ? framelessEdgeStyle : edgeStyle) +
       (isTop ? "top:" : "bottom:") + panelOffset() + "px;" +
-      "width:" + (frameless ? FRAMELESS_W : PANEL_W) + "px;" +
-      "height:" + (frameless ? FRAMELESS_H : PANEL_H) + "px;" +
+      "width:" + (frameless ? FRAMELESS_W : panelW()) + "px;" +
+      "height:" + (frameless ? FRAMELESS_H : panelH()) + "px;" +
       "max-width:calc(100vw - 40px);max-height:calc(100vh - " + (panelOffset() + 24) + "px);" +
       "z-index:2147483000;display:none;" +
       "transition:width 0.18s ease,height 0.18s ease;" +
@@ -381,14 +391,14 @@
       // The panel asks for width when its transcript column appears. The
       // host page's viewport is the authority, not the request: a phone
       // keeps the card and the panel simply never gets its second column.
-      var want = Math.max(260, Math.min(Number(data.width) || PANEL_W, window.innerWidth - 40));
+      var want = Math.max(260, Math.min(Number(data.width) || panelW(), window.innerWidth - 40));
       panelWrap.style.width = want + "px";
     } else if (data.type === "client_tool_call") {
       runClientTool(data);
     } else if (data.type === "expand") {
       expanded = Boolean(data.expanded);
-      panelWrap.style.width = (expanded ? PANEL_W_BIG : PANEL_W) + "px";
-      panelWrap.style.height = (expanded ? PANEL_H_BIG : PANEL_H) + "px";
+      panelWrap.style.width = panelW() + "px";
+      panelWrap.style.height = panelH() + "px";
     }
   });
 
@@ -439,6 +449,12 @@
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (config) {
         if (!config) return;
+        landscape = config.orientation === "landscape";
+        if (!config.transparent && landscape && panelWrap) {
+          // Already built as the portrait card (the visitor clicked before this landed): reshape it.
+          panelWrap.style.width = panelW() + "px";
+          panelWrap.style.height = panelH() + "px";
+        }
         if (config.transparent) {
           frameless = true;
           if (panelWrap) {

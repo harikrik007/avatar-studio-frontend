@@ -383,10 +383,16 @@ function PreviewPanel({
   const avatar = f.selectedAvatar;
   const keyable = Boolean(avatar?.supports_transparency);
   const checker = f.form.transparent && keyable;
+  // The box's shape follows the Display mode choice -- except during a test call, which keeps the shape it started with: the
+  // panel would otherwise restart the call for the new render (its frame changed) the moment the choice is switched.
+  const callShape = useRef<boolean | null>(null);
+  if (!testMode) callShape.current = null;
+  else if (callShape.current === null) callShape.current = f.form.orientation === "portrait";
+  const portrait = testMode ? Boolean(callShape.current) : f.form.orientation === "portrait";
   const voice = voiceById(f.form.voice);
   return (
     <aside className="lb-right">
-      <div className="lb-preview-wrap">
+      <div className={`lb-preview-wrap${portrait ? " lb-preview-wrap-portrait" : ""}`}>
         {/* A test call is built from the SAVED agent (the backend reads it from the database when the call starts), so
             edits that are not saved yet are not in it. Say so above the frame, where the call is. Only when there is a
             saved agent to test: a new agent has no test call yet. */}
@@ -406,14 +412,15 @@ function PreviewPanel({
             </div>
           </div>
         ) : null}
-        <div className={`lb-preview${checker ? " lb-preview-checker" : ""}${testMode ? " lb-preview-live" : ""}`}>
+        {/* The box takes the Display mode's shape (saved or not), and a test call asks for the render of that shape. */}
+        <div className={`lb-preview${portrait ? " lb-preview-portrait" : ""}${checker ? " lb-preview-checker" : ""}${testMode ? " lb-preview-live" : ""}`}>
           {testMode && f.agent ? (
             <LiveTestPanel
               key={testMode}
               agentId={f.agent.id}
               pipeline={testMode === "cascade" ? "cascade" : undefined}
-              // the preview box is landscape, like the idle picture: ask for the landscape render so the call fills it the same way
-              frame="wide"
+              // the render of the shape the box has, so the call fills it the way the idle picture does
+              frame={portrait ? "portrait" : "wide"}
               stopLabel="End call"
               stopClassName="lb-btn-endcall"
               onStopped={() => setTestMode(null)}

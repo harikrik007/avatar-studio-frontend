@@ -35,6 +35,9 @@ type Props = {
    * showing it inside the panel. Only works on an avatar built from a
    * green-screen image; everything else about the session is identical. */
   transparent?: boolean;
+  /** The shape the agent's owner chose (the builder's Display mode): the portrait card / figure, or the landscape one. Also
+   * decides which render the session asks for, so the picture fills the shape it is shown in. */
+  orientation?: "portrait" | "landscape";
   origin?: string;
   previewVideoUrl?: string | null;
   previewImageUrl?: string | null;
@@ -74,10 +77,15 @@ const CHUNK_MERGE_MS = 2500;
 // room for it -- a phone gets the card alone rather than two cramped
 // columns.
 const CARD_W = 340;
+// The landscape card: the 1152x768 render's own 3:2 at the frame's height (public/widget.js PANEL_W_LANDSCAPE, which must match).
+const CARD_W_LANDSCAPE = 540;
 const TRANSCRIPT_W = 280;
-const MIN_WIDE_PX = 560;
+// Room for the transcript column = the card plus at least this much: 560 px for the portrait card, as it always was.
+const TRANSCRIPT_MIN_PX = 220;
 
-export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, transparent, origin, previewVideoUrl, previewImageUrl }: Props) {
+export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, transparent, orientation = "portrait", origin, previewVideoUrl, previewImageUrl }: Props) {
+  const landscape = orientation === "landscape";
+  const cardW = landscape ? CARD_W_LANDSCAPE : CARD_W;
   const [status, setStatus] = useState<Status>("checking");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>(greetingLabel);
@@ -107,7 +115,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   const logRef = useRef<HTMLDivElement | null>(null);
   const bubbleTextRef = useRef<HTMLDivElement | null>(null);
   const captionRef = useRef<HTMLDivElement | null>(null);
-  const showTranscript = hasRoom && messages.length > 0;
+  // From the moment the call connects, not from the first words: the frame is widened for this column at connect, and an empty
+  // column for the second before the greeting is better than the card stretched across the whole widened frame, cropping her.
+  const showTranscript = hasRoom && (messages.length > 0 || status === "listening");
 
   const sessionRef = useRef<AvatarSession | null>(null);
   const roomNameRef = useRef<string | null>(null);
@@ -157,11 +167,11 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   // were actually given, not about what we asked for: the host clamps our
   // width to its own viewport, so this reads the result.
   useEffect(() => {
-    const measure = () => setHasRoom(window.innerWidth >= MIN_WIDE_PX);
+    const measure = () => setHasRoom(window.innerWidth >= cardW + TRANSCRIPT_MIN_PX);
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, []);
+  }, [cardW]);
 
   // Newest line at the bottom, always in view.
   useEffect(() => {
@@ -300,7 +310,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     }
     // Keep the panel's transcript column visible when it holds an ending
     // notice; manual hang-up still returns to the compact card.
-    if (!transparent && !notice) askHost("resize", { width: CARD_W });
+    if (!transparent && !notice) askHost("resize", { width: cardW });
     setStatus(notice ? "ended" : "idle");
     setTranscript(notice ?? greetingLabel);
 
@@ -432,9 +442,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
         },
         {
           sessionUrl: "/api/embed/session",
-          // A frameless avatar floats on the host page with nothing around her, so she gets the landscape render: the idle still's own
-          // shape, with the shoulders whole. The portrait render is only 768 px wide and cuts them off at hard vertical edges.
-          sessionBody: { public_key: publicKey, origin, ...(transparent ? { frame: "wide" } : {}) },
+          // The render of the shape the owner chose: landscape is the idle still's own shape, with the shoulders whole; portrait is
+          // 768 px wide and fills the portrait card (or figure). Said explicitly, though the backend would pick the same from the agent.
+          sessionBody: { public_key: publicKey, origin, frame: landscape ? "wide" : "portrait" },
         }
       );
 
@@ -444,7 +454,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       // one -- asking anyway squeezed its fixed-width layout down to 620px
       // on every connect, which is what cropped the avatar and left the
       // reply bubble too narrow not to scroll.
-      if (!transparent) askHost("resize", { width: CARD_W + TRANSCRIPT_W });
+      if (!transparent) askHost("resize", { width: cardW + TRANSCRIPT_W });
       sessionRef.current = session;
       roomNameRef.current = session.room.name;
       ownsSessionRef.current = true;
@@ -516,7 +526,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             audioTrack={audioTrack}
             speakerMuted={speakerMuted}
             idleImageSrc={previewImageUrl ?? null}
-            style={framelessCanvasStyle}
+            style={landscape ? framelessCanvasStyle : framelessCanvasPortraitStyle}
           />
         </div>
 
@@ -933,6 +943,17 @@ const framelessCanvasStyle: React.CSSProperties = {
   // the frame's edge, so the right margin hangs outside the shell (which clips it) and the left one lies under the chat column.
   transform: "translateX(16.2%)",
   // What makes her stand on the page rather than sit on top of it.
+  filter: "drop-shadow(0 24px 34px rgba(0,0,0,0.34))",
+};
+
+// Display mode "portrait": the 768x1152 render in a 2:3 box at the shell's full height (her width, 66.667vh, is the same as
+// the landscape figure's, so the chat column below fits either). Pinned to that shape for the reason given above: the idle
+// still is landscape, and objectFit:cover crops it to the box instead of letting the box jump when the call connects.
+const framelessCanvasPortraitStyle: React.CSSProperties = {
+  height: "100%",
+  aspectRatio: "768 / 1152",
+  objectFit: "cover",
+  display: "block",
   filter: "drop-shadow(0 24px 34px rgba(0,0,0,0.34))",
 };
 

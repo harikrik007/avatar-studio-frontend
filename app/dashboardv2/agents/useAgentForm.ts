@@ -5,8 +5,8 @@
  * (/agents/:id). Moved out of the old CreateAgentForm and AgentDialog, which
  * each kept their own copy of the same fields and fetch calls. The request
  * payloads are unchanged:
- *   create  POST  /api/agents          {avatar_id, name, opening_intro, system_prompt, voice, transparent, tools}
- *   save    PATCH /api/agents/:id      {avatar_id, transparent, name, opening_intro, system_prompt, voice, tools}
+ *   create  POST  /api/agents          {avatar_id, name, opening_intro, system_prompt, voice, transparent, orientation, tools}
+ *   save    PATCH /api/agents/:id      {avatar_id, transparent, orientation, name, opening_intro, system_prompt, voice, tools}
  *   status  PATCH /api/agents/:id      {status: "live" | "draft"}
  *   delete  DELETE /api/agents/:id
  * Knowledge files upload through /api/agents/:id/documents -- straight away in
@@ -16,12 +16,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DEFAULT_VOICE } from "@/lib/voices";
 import type { Tool } from "@/lib/tools/model";
-import { isPickable, type Agent, type Avatar } from "./shared";
+import { isPickable, type Agent, type Avatar, type Orientation } from "./shared";
 
 export type AgentFormState = {
   name: string;
   avatarId: string;
   transparent: boolean;
+  // How the avatar is shown in the widget and the preview: the portrait card or the landscape one (the stock pictures' own shape).
+  orientation: Orientation;
   openingIntro: string;
   systemPrompt: string;
   voice: string;
@@ -32,6 +34,7 @@ const EMPTY: AgentFormState = {
   name: "",
   avatarId: "",
   transparent: false,
+  orientation: "portrait",
   openingIntro: "",
   systemPrompt: "",
   voice: DEFAULT_VOICE,
@@ -43,6 +46,7 @@ function fromAgent(agent: Agent): AgentFormState {
     name: agent.name,
     avatarId: agent.avatar_id,
     transparent: Boolean(agent.transparent),
+    orientation: agent.orientation === "landscape" ? "landscape" : "portrait",
     openingIntro: agent.opening_intro,
     systemPrompt: agent.system_prompt,
     voice: agent.voice,
@@ -141,6 +145,7 @@ export function useAgentForm(agentId?: string) {
       body: JSON.stringify({
         avatar_id: form.avatarId,
         transparent: form.transparent,
+        orientation: form.orientation,
         name: form.name,
         opening_intro: form.openingIntro,
         system_prompt: form.systemPrompt,
@@ -198,6 +203,7 @@ export function useAgentForm(agentId?: string) {
         system_prompt: form.systemPrompt,
         voice: form.voice,
         transparent: form.transparent,
+        orientation: form.orientation,
         tools: form.tools,
       }),
     });

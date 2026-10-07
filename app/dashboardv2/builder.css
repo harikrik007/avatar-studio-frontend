@@ -549,6 +549,84 @@
   padding: 7px;
 }
 
+/* Display mode: portrait or landscape. Two cards like the avatar cards above them, each with the shape it stands for. */
+.landing .lb-orient {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.landing .lb-orient-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.landing .lb-orient-opt:hover {
+  border-color: rgba(223, 248, 255, 0.28);
+}
+
+.landing .lb-orient-on,
+.landing .lb-orient-on:hover {
+  border: 2px solid var(--accent);
+  padding: 9px 11px;
+}
+
+.landing .lb-orient-icon {
+  flex: none;
+  border: 2px solid currentColor;
+  border-radius: 4px;
+  color: var(--fg-muted);
+}
+
+.landing .lb-orient-on .lb-orient-icon {
+  color: var(--accent);
+}
+
+.landing .lb-orient-icon-portrait {
+  width: 18px;
+  height: 26px;
+}
+
+.landing .lb-orient-icon-landscape {
+  width: 28px;
+  height: 19px;
+}
+
+.landing .lb-orient-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.landing .lb-orient-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.landing .lb-orient-help {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--fg-muted);
+}
+
+@media (max-width: 420px) {
+  .landing .lb-orient {
+    grid-template-columns: 1fr;
+  }
+}
+
 .landing .lb-avatar-img {
   width: 100%;
   aspect-ratio: 1 / 1;
@@ -1699,6 +1777,29 @@
   inset: 0;
 }
 
+/* Display mode "portrait": a tall box, as wide as the column allows without running off a short screen. The idle picture is
+   cropped to it (cover) the way the portrait render frames her; a call's video is that render, so it fills the box exactly. */
+.landing .lb-preview-portrait {
+  aspect-ratio: 2 / 3;
+  width: min(100%, 400px, calc((100vh - 300px) * 2 / 3));
+  margin-inline: auto;
+}
+
+.landing .lb-preview-portrait.lb-preview-live {
+  aspect-ratio: auto;
+}
+
+/* the unsaved-changes banner sits over the frame and is as wide as it, in either shape */
+.landing .lb-preview-wrap-portrait .lb-preview-banner {
+  width: min(100%, 400px, calc((100vh - 300px) * 2 / 3));
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+.landing .lb-preview-portrait .l-live-test-video-wrap {
+  aspect-ratio: 2 / 3;
+}
+
 .landing .lb-preview .l-live-test-bar {
   padding: 10px 14px;
   border-bottom: none;
@@ -1813,6 +1914,12 @@
   .landing .lb-preview:not(.lb-preview-live) {
     aspect-ratio: auto;
     height: 180px;
+  }
+
+  .landing .lb-preview-portrait:not(.lb-preview-live) {
+    aspect-ratio: 2 / 3;
+    height: auto;
+    width: min(100%, 240px);
   }
 
   .landing .lb-left {

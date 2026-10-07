@@ -55,6 +55,8 @@ export type Deployment = {
   max_concurrent_sessions: number;
 };
 
+export type Orientation = "portrait" | "landscape";
+
 export type Agent = {
   id: string;
   avatar_id: string;
@@ -72,6 +74,8 @@ export type Agent = {
   // Needs a green-screen avatar; off by default, so nothing changes for an
   // agent that does not ask for it.
   transparent?: boolean;
+  // The shape the avatar is shown in: in the embedded widget and in the builder's preview. Older agents may not carry it (portrait).
+  orientation?: Orientation;
   created_at: string;
   documents: AgentDocument[];
   // Set once the agent has been made live at least once -- see the
@@ -158,8 +162,9 @@ export function LiveTestPanel({
   // "cascade": the test-only VAD -> speech-to-text -> LLM -> TTS pipeline
   // instead of Gemini Live (see the backend's cascade-test-session).
   pipeline?: "cascade";
-  // "wide": ask for the landscape render (1152x768), for a landscape preview box, instead of the portrait default.
-  frame?: "wide";
+  // The render to ask for: "wide" (1152x768) for a landscape box, "portrait" (768x1152) for a portrait one. Without it the
+  // agent's saved Display mode decides (the backend's rule); the builder always says, since its box may show an unsaved choice.
+  frame?: "wide" | "portrait";
   // The builder's preview calls it "End call" and styles it red.
   stopLabel?: string;
   stopClassName?: string;
@@ -242,7 +247,7 @@ export function LiveTestPanel({
 
       const params = new URLSearchParams();
       if (pipeline === "cascade") params.set("pipeline", "cascade");
-      if (frame === "wide") params.set("frame", "wide");
+      if (frame) params.set("frame", frame);
       const query = params.size ? `?${params}` : "";
       const res = await fetch(`/api/agents/${agentId}/test-session${query}`, { method: "POST" });
       const body = await res.json().catch(() => ({}));

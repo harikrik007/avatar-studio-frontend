@@ -14,6 +14,7 @@ type EmbedConfig = {
   preview_image_url: string | null;
   agent_name: string | null;
   transparent?: boolean;
+  orientation?: string;
 };
 
 /**
@@ -88,6 +89,7 @@ export default async function EmbedPage({ params }: { params: Promise<{ key: str
       previewImageUrl={config.preview_image_url}
       agentName={config.agent_name ?? undefined}
       transparent={config.transparent ?? false}
+      orientation={config.orientation === "landscape" ? "landscape" : "portrait"}
     />
     </>
   );

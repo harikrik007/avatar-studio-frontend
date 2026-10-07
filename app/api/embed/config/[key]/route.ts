@@ -44,6 +44,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
       // widget.js needs this before it creates the panel: a frameless
       // widget is a different shape with no background at all.
       transparent: config.transparent ?? false,
+      // ...and this: the panel is a portrait card or a landscape one (the frame's size is set before it opens).
+      orientation: config.orientation === "landscape" ? "landscape" : "portrait",
     },
     {
       headers: {
