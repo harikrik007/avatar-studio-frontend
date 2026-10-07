@@ -47,18 +47,22 @@ export default function DashboardV2Layout({ children }: { children: React.ReactN
   const isBuilder = /^\/dashboardv2\/agents\/[^/]+/.test(pathname ?? "");
 
   return (
-    <main className={`landing ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
+    <main className={`landing ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}${isBuilder ? " l-builder-page" : ""}`}>
       {/* Full-bleed on the dashboard: the old 1120px-centred nav sat over a
           sidebar layout, so the brand and the content column were centred to
-          two different boxes and nothing lined up. */}
-      <nav className="l-nav l-nav-dash">
-        <Link href="/" className="l-brand" style={{ textDecoration: "none", color: "inherit" }}>
-          Avatar Studio
-        </Link>
-        <div className="l-nav-links">
-          <Link href="/pricing">Pricing</Link>
-        </div>
-      </nav>
+          two different boxes and nothing lined up. Not on the builder: its own
+          top bar (back to Agents, Test agent, Save) is all it needs, and the
+          editor gets the whole height. */}
+      {isBuilder ? null : (
+        <nav className="l-nav l-nav-dash">
+          <Link href="/" className="l-brand" style={{ textDecoration: "none", color: "inherit" }}>
+            Avatar Studio
+          </Link>
+          <div className="l-nav-links">
+            <Link href="/pricing">Pricing</Link>
+          </div>
+        </nav>
+      )}
 
       <div className="l-dash-layout">
         {isBuilder ? null : (

@@ -3,6 +3,11 @@
    on the right, on the dashboard's dark theme + cyan accent (tokens in
    globals.css :root). Scoped under .landing .lb so nothing else changes. */
 
+/* The builder pages have no site header (app/dashboardv2/layout.tsx): everything sized "below the header" starts at the top. */
+.landing.l-builder-page {
+  --l-nav-h: 0px;
+}
+
 .landing .lb {
   /* wide enough for all six tabs in one row (Prompt … Advanced) */
   --lb-left-w: 500px;
