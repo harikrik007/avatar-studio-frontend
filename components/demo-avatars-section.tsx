@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Track, type RemoteTrack } from "livekit-client";
 import { LiveKitFace } from "@/components/livekit-face";
 import { AvatarSession, type AvatarToolCall } from "@/lib/avatar-session";
+import type { LandingPersona } from "@/lib/personas";
 
 type DemoAgent = {
   key: string; // embed public_key, seeded via scripts/seed_pizza.py / seed_bank.py / seed_ringme.py
@@ -11,7 +12,9 @@ type DemoAgent = {
   business: string;
   blurb: string;
   idleVideoSrc: string; // each avatar's own idle loop -- LiveKitFace's default is a single generic clip
-  kind: "pizza" | "bank" | "ringme"; // picks which tool-call handler below answers this card's calls
+  /** A still of the avatar, shown instead of the idle loop (the personas are Anam faces, which have no clip we can serve). */
+  idleImageSrc?: string;
+  kind: "pizza" | "bank" | "ringme" | "persona"; // picks which tool-call handler below answers this card's calls
 };
 
 // All three are real, box-hosted deployments (never RunPod) -- seeded into
@@ -435,7 +438,16 @@ const DEMO_HARD_TIMEOUT_MS = 3 * 60_000;
 const DEMO_WARNING_MS = DEMO_HARD_TIMEOUT_MS - 30_000;
 const QUEUE_POLL_MS = 4_000;
 
-export function DemoAvatarsSection() {
+/** A persona published in the admin dashboard, as a card. Its own tools (the ones set on the agent) run on the server; the page-side
+ * demo tools of the three built-in demos below do not apply to it. */
+function personaCard(p: LandingPersona): DemoAgent {
+  return { key: p.key, name: p.name, business: p.role, blurb: p.blurb, idleVideoSrc: "", idleImageSrc: `/api/embed/still/${p.key}`, kind: "persona" };
+}
+
+/** `personas`: the published ones from the admin dashboard. With none (nothing published, or the backend unreachable) the three
+ * built-in demos below stay, so the section is never empty. */
+export function DemoAvatarsSection({ personas = [] }: { personas?: LandingPersona[] }) {
+  const AGENTS: DemoAgent[] = personas.length > 0 ? personas.map(personaCard) : DEMO_AGENTS;
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<Record<string, CardStatus>>({});
   const [transcript, setTranscript] = useState("");
@@ -533,7 +545,7 @@ export function DemoAvatarsSection() {
     // view_cart/calculate_cart_total all answer for real now (see the
     // execute*ToolCall functions above) instead of the blanket stub.
     if (!calls.length || !sessionRef.current) return;
-    const kind = DEMO_AGENTS.find((a) => a.key === activeKeyRef.current)?.kind;
+    const kind = AGENTS.find((a) => a.key === activeKeyRef.current)?.kind;
 
     let responses: { id?: string; name?: string; response: Record<string, unknown> }[];
     if (kind === "pizza") {
@@ -618,7 +630,7 @@ export function DemoAvatarsSection() {
     setCardStatus(key, "queued");
     clearQueuePoll();
     queuePollRef.current = setInterval(async () => {
-      const agent = DEMO_AGENTS.find((a) => a.key === key);
+      const agent = AGENTS.find((a) => a.key === key);
       if (!agent) return;
       try {
         const capRes = await fetch(`/api/embed/capacity/${key}`);
@@ -680,11 +692,11 @@ export function DemoAvatarsSection() {
   // interrupting the live track. The other two keep their original
   // relative order on whichever side is left, so a second card taking
   // focus doesn't also shuffle which side the first one recedes to.
-  const activeIndex = activeKey ? DEMO_AGENTS.findIndex((a) => a.key === activeKey) : -1;
+  const activeIndex = activeKey ? AGENTS.findIndex((a) => a.key === activeKey) : -1;
   function cardOrder(index: number, focusIndex: number): number {
     if (focusIndex === -1) return index;
     if (index === focusIndex) return 1;
-    const others = DEMO_AGENTS.map((_, i) => i).filter((i) => i !== focusIndex);
+    const others = AGENTS.map((_, i) => i).filter((i) => i !== focusIndex);
     return others.indexOf(index) === 0 ? 0 : 2;
   }
 
@@ -694,13 +706,14 @@ export function DemoAvatarsSection() {
         <span className="l-kicker">Try it live</span>
         <h2>Talk to a real avatar, right now</h2>
         <p>
-          Three working agents, live on our own GPU box — no signup, no
-          waiting for a demo call.
+          {personas.length > 0
+            ? "Live agents you can talk to — no signup, no waiting for a demo call."
+            : "Three working agents, live on our own GPU box — no signup, no waiting for a demo call."}
         </p>
       </div>
 
-      <div className="l-demo-grid">
-        {DEMO_AGENTS.map((agent, index) => {
+      <div className={`l-demo-grid${AGENTS.length < 3 ? " l-demo-grid-fit" : ""}`} style={{ ["--l-demo-cols" as string]: Math.min(AGENTS.length, 3) }}>
+        {AGENTS.map((agent, index) => {
           const status = statuses[agent.key] ?? "idle";
           const isActive = activeKey === agent.key;
 
@@ -718,13 +731,14 @@ export function DemoAvatarsSection() {
                   width={220}
                   height={260}
                   idleVideoSrc={agent.idleVideoSrc}
+                  idleImageSrc={agent.idleImageSrc}
                 />
                 {isActive && isSpeaking ? <span className="l-demo-speaking-dot" /> : null}
               </div>
 
               <h3>{agent.name}</h3>
-              <p className="l-demo-business">{agent.business}</p>
-              <p className="l-demo-blurb">{agent.blurb}</p>
+              {agent.business ? <p className="l-demo-business">{agent.business}</p> : null}
+              {agent.blurb ? <p className="l-demo-blurb">{agent.blurb}</p> : null}
 
               {isActive ? (
                 <>

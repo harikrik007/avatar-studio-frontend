@@ -3,6 +3,11 @@ import "./landing.css";
 import { inter, jetbrainsMono, spaceGrotesk } from "./landing-fonts";
 import PricingGrid from "./PricingGrid";
 import { DemoAvatarsSection } from "@/components/demo-avatars-section";
+import { fetchLandingPersonas } from "@/lib/personas";
+
+// The demo cards are the personas published in the admin dashboard; they are read from the backend and cached for a minute, so a
+// newly published persona shows up within about a minute without a deploy.
+export const revalidate = 60;
 
 // The same three steps the dashboard's flow rail shows. The landing used to
 // describe the four internal stages of avatar creation instead, which never
@@ -79,7 +84,8 @@ const FAQS = [
   },
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const personas = await fetchLandingPersonas();
   return (
     <main className={`landing ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}>
       <nav className="l-nav">
@@ -115,7 +121,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <DemoAvatarsSection />
+      <DemoAvatarsSection personas={personas} />
 
       <div className="l-pipeline">
         {PIPELINE.map((node, i) => (

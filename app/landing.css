@@ -418,6 +418,14 @@ html {
   gap: 20px;
 }
 
+/* One or two cards sit in the middle at the same width as three would, instead of piling up on the left. */
+.landing .l-demo-grid-fit {
+  grid-template-columns: repeat(var(--l-demo-cols, 3), minmax(0, 1fr));
+  max-width: calc(var(--l-demo-cols, 3) * 360px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .landing .l-demo-card {
   background: var(--l-bg-raised);
   border: 1px solid var(--l-border);
