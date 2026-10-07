@@ -26,7 +26,6 @@ import type { LandingPersona } from "@/lib/personas";
 
 type Status = "idle" | "checking" | "connecting" | "live" | "queued" | "error" | "ended";
 type EndReason = "visitor_closed" | "idle_timeout" | "hard_timeout" | "agent_ended";
-type Line = { id: number; role: "assistant" | "user"; text: string; at: number };
 
 // A visitor who opens the demo and wanders off must not hold one of a small, shared pool of seats.
 const IDLE_TIMEOUT_MS = 90_000;
@@ -34,8 +33,6 @@ const IDLE_TIMEOUT_MS = 90_000;
 const DEMO_LIMIT_MS = 3 * 60_000;
 const WARNING_MS = 30_000;
 const QUEUE_POLL_MS = 4_000;
-// Transcripts arrive as small deltas; chunks from the same speaker this close together are one sentence still being said.
-const CHUNK_MERGE_MS = 2_500;
 const DOCK_OFF_KEY = "lh-dock-off";
 
 const stillOf = (p: LandingPersona) => `/api/embed/still/${encodeURIComponent(p.key)}`;
@@ -60,7 +57,6 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
   const [selectedKey, setSelectedKey] = useState(personas[0]?.key ?? "");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [lines, setLines] = useState<Line[]>([]);
   const [videoTrack, setVideoTrack] = useState<RemoteTrack | null>(null);
   const [audioTrack, setAudioTrack] = useState<RemoteTrack | null>(null);
   const [audioBlocked, setAudioBlocked] = useState(false);
@@ -79,7 +75,6 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
   const busyRef = useRef(false);
   const endingRef = useRef(false);
   const startedAtRef = useRef(0);
-  const seqRef = useRef(0);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -108,21 +103,6 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
   function armIdle() {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     idleTimerRef.current = setTimeout(() => void endSession("idle_timeout"), IDLE_TIMEOUT_MS);
-  }
-
-  function addLine(role: "assistant" | "user", text: string) {
-    if (!text) return;
-    setLines((prev) => {
-      const last = prev[prev.length - 1];
-      const now = Date.now();
-      // Concatenated verbatim: the word breaks live in the deltas themselves (" I'm", " Riya"). Tidied once, at render.
-      if (last && last.role === role && now - last.at < CHUNK_MERGE_MS) {
-        return [...prev.slice(0, -1), { ...last, text: last.text + text, at: now }];
-      }
-      if (!text.trim()) return prev;
-      seqRef.current += 1;
-      return [...prev, { id: seqRef.current, role, text, at: now }].slice(-6);
-    });
   }
 
   async function endSession(reason: EndReason, uiStatus: Status = "ended", note?: string) {
@@ -204,7 +184,6 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
 
   async function connect(p: LandingPersona) {
     setStatus("connecting");
-    setLines([]);
     setEndNote(null);
     const { AvatarSession } = await prefetch();
     const session = await AvatarSession.connect(
@@ -214,10 +193,8 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
           sessionRef.current?.sendToolResponse({
             functionResponses: calls.map((c) => ({ id: c.id, name: c.name, response: { success: false, error: "Not available in this demo." } })),
           }),
-        onTranscript: (role, text) => {
-          armIdle();
-          addLine(role, text);
-        },
+        // Nothing is shown of the conversation; a transcript delta only proves the visitor is still there.
+        onTranscript: () => armIdle(),
         onSpeakingChange: (s) => {
           armIdle();
           setSpeaking(s);
@@ -375,9 +352,8 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
   const showDock = scrolledPast && (!dockHidden || active || status === "ended");
   const boxed = !persona.greenScreen;
   const buttonLabel = status === "checking" ? "Checking…" : status === "connecting" ? "Connecting…" : status === "error" ? "Try again" : `Talk to ${persona.name}`;
-  const shown = lines.slice(-2);
 
-  /** What sits over the avatar's feet: the Talk button, or the live captions and End call, or the end-of-call / queue message. */
+  /** What sits over the avatar's feet: the Talk button, or End call, or the end-of-call / queue message. */
   function controls(variant: "hero" | "dock") {
     const dock = variant === "dock";
     if (status === "ended") {
@@ -418,22 +394,9 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
     }
     if (live) {
       return (
-        <>
-          <div className="lh-glass lh-captions" aria-live="polite" aria-label="Live captions">
-            {shown.length ? (
-              shown.map((l) => (
-                <p key={l.id} className={l.role === "user" ? "lh-cap-user" : "lh-cap-agent"}>
-                  <b>{l.role === "user" ? "You" : persona.name}</b> {l.text.replace(/\s+/g, " ").trim()}
-                </p>
-              ))
-            ) : (
-              <p className="lh-cap-agent">Say hello to {persona.name}.</p>
-            )}
-          </div>
-          <button type="button" className="l-btn lh-end" onClick={() => void endSession("visitor_closed")}>
-            End call
-          </button>
-        </>
+        <button type="button" className="l-btn lh-end" onClick={() => void endSession("visitor_closed")}>
+          End call
+        </button>
       );
     }
     return (

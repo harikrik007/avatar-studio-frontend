@@ -331,11 +331,6 @@
 .landing .lh-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(4, 34, 44, 0.3); border-top-color: #04222c; animation: lh-turn 0.8s linear infinite; }
 @keyframes lh-turn { to { transform: rotate(360deg); } }
 .landing .lh-error { margin: 0; padding: 10px 14px; font-size: 13.5px; color: var(--lh-danger); line-height: 1.45; max-width: 400px; }
-.landing .lh-captions { display: grid; gap: 6px; padding: 12px 16px; min-height: 44px; width: min(420px, 100%); font-size: 14px; line-height: 1.4; max-height: 100px; overflow: hidden; text-align: left; }
-.landing .lh-captions p { margin: 0; }
-.landing .lh-captions b { font-weight: 600; margin-right: 4px; }
-.landing .lh-cap-agent b { color: var(--l-accent); }
-.landing .lh-cap-user { color: var(--l-muted); }
 .landing .lh-ended { display: grid; gap: 6px; text-align: left; padding: 16px 18px; width: min(420px, 100%); }
 .landing .lh-ended strong { font-size: 17px; font-family: var(--font-display), sans-serif; }
 .landing .lh-ended > span { color: var(--l-muted); font-size: 14px; line-height: 1.45; }
@@ -371,9 +366,9 @@
 .landing .lh-dock .lh-end { box-shadow: none; }
 /* messages sit above the avatar, right-aligned to the corner */
 .landing .lh-dock .lh-glass { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 3; width: min(300px, calc(100vw - 28px)); background: rgba(8, 12, 15, 0.92); box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5); }
-.landing .lh-dock .lh-ended, .landing .lh-dock .lh-captions { padding: 12px 14px; }
+.landing .lh-dock .lh-ended { padding: 12px 14px; }
 .landing .lh-dock .lh-ended strong { font-size: 15px; }
-.landing .lh-dock .lh-ended > span, .landing .lh-dock .lh-captions { font-size: 13px; }
+.landing .lh-dock .lh-ended > span { font-size: 13px; }
 .landing .lh-dock .lh-error { font-size: 12.5px; }
 .landing .lh-dock-timer { top: 0; right: 0; padding: 5px 9px; font-size: 11px; }
 .landing .lh-dock .lh-sound { top: 30px; right: 0; }
