@@ -1,14 +1,12 @@
 "use client";
 
 /**
- * What each call ran and what it was charged, for widget (embedded) calls and for the dashboard's test
- * button. A client sees its own calls: how long each ran and the flat charge on that time (US$0.20 a
- * minute, billed by the second) -- no token counts, no provider's name (Hari, 2026-10-06). An administrator
- * (the backend's USAGE_ADMIN_EMAILS) can switch to every client's and also sees the language-model tokens
- * and our estimated cost. Numbers come from api/usage.py.
+ * How long each call ran, for widget (embedded) calls and for the dashboard's test button, with the day / agent / type breakdown,
+ * the filters and a CSV. A customer is billed in minutes (a plan's minutes will come later), so this page speaks minutes and
+ * nothing else: no prices, no token counts, no provider names. Every client's usage, tokens and cost live in the separate admin
+ * dashboard (avatar-studio-admin), not here, whoever is signed in.
  *
- * Ditto / FlashHead / Wav2Lip calls are listed with their duration but no tokens: their Gemini session
- * runs on the GPU side, so the backend never sees it.
+ * Ditto / FlashHead / Wav2Lip calls are listed with their duration like the others.
  */
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
@@ -16,18 +14,13 @@ import "./usage.css";
 import {
   KIND_FILTERS,
   endReasonLabel,
-  flagLabel,
-  formatCharge,
-  formatCost,
+  formatCount,
   formatDayRange,
   formatMinutes,
   formatSeconds,
-  formatTokens,
-  formatUsd,
   kindLabel,
   localDay,
   rangeLastDays,
-  rateText,
   statusBadgeClass,
   statusLabel,
   tzOffsetMinutes,
@@ -35,7 +28,6 @@ import {
   utcLabel,
   type GroupBy,
   type UsageCalls,
-  type UsageEventRow,
   type UsageItem,
   type UsageSummary,
 } from "@/lib/usage";
@@ -53,13 +45,14 @@ const STATUSES = [
   { label: "Lost", value: "lost" },
   { label: "Running", value: "active" },
 ];
+const GROUPS: { value: GroupBy; label: string }[] = [
+  { value: "day", label: "Day" },
+  { value: "agent", label: "Agent" },
+  { value: "kind", label: "Type" },
+];
 const PAGE = 50;
 
 type AgentOption = { id: string; name: string };
-type Detail = UsageEventRow[] | "loading" | "error";
-
-/** Tokens are only recorded where the brain runs in this backend (the hosted-avatar path). Administrators' only. */
-const hasTokens = (c: UsageItem) => c.renderer === "anam" && c.source !== "backfill";
 
 export default function UsagePage() {
   // A preset (1 = today, 7, 30, 90 days) or a range picked by hand.
@@ -69,7 +62,6 @@ export default function UsagePage() {
   const [kind, setKind] = useState("");
   const [status, setStatus] = useState("");
   const [agentId, setAgentId] = useState("");
-  const [scope, setScope] = useState<"mine" | "all">("mine");
   const [groupBy, setGroupBy] = useState<GroupBy>("day");
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [summary, setSummary] = useState<UsageSummary | null>(null);
@@ -79,7 +71,6 @@ export default function UsagePage() {
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
-  const [details, setDetails] = useState<Record<string, Detail>>({});
   // A slower answer to an older filter must not overwrite a newer one.
   const seq = useRef(0);
 
@@ -87,7 +78,7 @@ export default function UsagePage() {
   const { from, to } = period === "custom" ? { from: customFrom || todayStr, to: customTo || todayStr } : rangeLastDays(period);
   // Days are the viewer's own: the backend reads from/to and the Day grouping in this offset.
   const tz = tzOffsetMinutes();
-  const filters = { from, to, kind, status, agent_id: scope === "mine" ? agentId : "", scope, tz };
+  const filters = { from, to, kind, status, agent_id: agentId, tz };
   const filterKey = JSON.stringify(filters);
 
   const load = useCallback(async () => {
@@ -147,24 +138,6 @@ export default function UsagePage() {
     }
   }
 
-  async function toggle(call: UsageItem) {
-    if (open === call.id) {
-      setOpen(null);
-      return;
-    }
-    setOpen(call.id);
-    if (!summary?.is_admin) return;                 // the token reports are an administrator's
-    if (details[call.id] && details[call.id] !== "error") return;
-    setDetails((d) => ({ ...d, [call.id]: "loading" }));
-    try {
-      const res = await fetch(`/api/usage/calls/${call.id}`);
-      const body = await res.json();
-      setDetails((d) => ({ ...d, [call.id]: res.ok ? (body.events as UsageEventRow[]) : "error" }));
-    } catch {
-      setDetails((d) => ({ ...d, [call.id]: "error" }));
-    }
-  }
-
   function chooseCustom() {
     if (period === "custom") return;
     setCustomFrom(from);          // start from what is on screen, so the inputs are never empty
@@ -187,35 +160,14 @@ export default function UsagePage() {
     if (day < customFrom) setCustomFrom(day);
   }
 
-  function chooseScope(next: "mine" | "all") {
-    setScope(next);
-    if (next === "mine" && groupBy === "client") setGroupBy("day");
-    if (next === "all") setAgentId("");
-  }
-
   const totals = summary?.totals;
-  const isAdmin = summary?.is_admin ?? false;
-  // Our cost and the token counts are the administrator's: the backend sends neither to anyone else. Every client
-  // gets the call time and the charge.
-  const showCost = isAdmin && !!totals?.cost;
-  const showClient = scope === "all";
-  const groupOptions: { value: GroupBy; label: string }[] = [
-    { value: "day", label: "Day" },
-    { value: "agent", label: "Agent" },
-    { value: "kind", label: "Type" },
-    ...(scope === "all" ? [{ value: "client" as GroupBy, label: "Client" }] : []),
-  ];
 
   return (
     <div className="l-dash-shell lu-shell">
       <div className="l-dash-header">
         <span className="l-kicker">Dashboard</span>
         <h1>Usage</h1>
-        <p>
-          {isAdmin
-            ? "What each call ran, what it was charged and what it used (language-model tokens), for embedded widgets and the test button."
-            : "How long each call ran and what it was charged, for embedded widgets and the test button."}
-        </p>
+        <p>How long each call ran, for embedded widgets and the test button.</p>
       </div>
 
       <div className="lu-filters" role="group" aria-label="Filters">
@@ -262,31 +214,15 @@ export default function UsagePage() {
             ))}
           </select>
         </label>
-        {scope === "mine" ? (
-          <label className="lu-select">
-            <span className="lu-sr">Agent</span>
-            <select value={agentId} onChange={(e) => setAgentId(e.target.value)} aria-label="Agent">
-              <option value="">All agents</option>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        {isAdmin ? (
-          <div className="lu-pills" role="group" aria-label="Whose usage">
-            <button type="button" aria-pressed={scope === "mine"}
-              className={`l-voice-filter-pill${scope === "mine" ? " l-voice-filter-active" : ""}`}
-              onClick={() => chooseScope("mine")}>
-              Mine
-            </button>
-            <button type="button" aria-pressed={scope === "all"}
-              className={`l-voice-filter-pill${scope === "all" ? " l-voice-filter-active" : ""}`}
-              onClick={() => chooseScope("all")}>
-              All clients
-            </button>
-          </div>
-        ) : null}
+        <label className="lu-select">
+          <span className="lu-sr">Agent</span>
+          <select value={agentId} onChange={(e) => setAgentId(e.target.value)} aria-label="Agent">
+            <option value="">All agents</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+        </label>
         <a className="l-btn l-btn-ghost lu-export" href={`/api/usage/export${usageQuery(filters)}`}>
           Export CSV
         </a>
@@ -305,43 +241,14 @@ export default function UsagePage() {
           </p>
 
           {totals ? (
-            <div className="lu-totals" aria-label="Totals for this period">
-              <Stat label="Calls" value={formatTokens(totals.calls)}
+            <div className="lu-totals lu-totals-three" aria-label="Totals for this period">
+              <Stat label="Calls" value={formatCount(totals.calls)}
                 sub={[`${totals.completed} completed`, totals.failed ? `${totals.failed} failed` : "",
                   totals.lost ? `${totals.lost} lost` : "", totals.active ? `${totals.active} running` : ""]
                   .filter(Boolean).join(" · ")} warn={totals.failed > 0} />
-              <Stat label="Call time" value={formatMinutes(totals.call_seconds)}
-                sub={isAdmin && (totals.other_renderer_seconds ?? 0) > 0
-                  ? `of which ${formatSeconds(totals.other_renderer_seconds)} on GPU renderers (not priced)` : undefined} />
-              {isAdmin ? <Stat label="Input tokens" value={formatTokens(totals.input_tokens)} sub="the whole conversation, each turn" /> : null}
-              {isAdmin ? (
-                <Stat label="Output tokens" value={formatTokens(totals.output_tokens)}
-                  sub={(totals.thought_tokens ?? 0) > 0 ? `+ ${formatTokens(totals.thought_tokens)} thinking` : undefined} />
-              ) : null}
-              <Stat label="Tool calls" value={formatTokens(totals.tool_calls)} />
-              <Stat label="Charge" value={formatCharge(totals.charge)} sub={summary ? rateText(summary.billing) : undefined} />
-              {showCost && totals.cost ? (
-                <Stat label="Estimated cost" value={formatCost(totals.cost)}
-                  sub={`Gemini ${formatUsd(totals.cost.llm)} · Call ${formatUsd(totals.cost.anam)}`} />
-              ) : null}
+              <Stat label="Call time" value={formatMinutes(totals.call_seconds)} />
+              <Stat label="Tool calls" value={formatCount(totals.tool_calls)} />
             </div>
-          ) : null}
-
-          {summary ? (
-            <p className="lu-note" role="note">
-              Charged at {rateText(summary.billing)} of call time, billed by the second.
-              {totals?.charge.approx || showCost ? " ≈ marks calls from before usage logging, whose length is approximate." : ""}
-              {showCost && summary.pricing ? (
-                <>
-                  {" "}Estimated cost (administrators only) is at list prices read on {summary.pricing.as_of}: Gemini Live
-                  and the cascade&apos;s language model, voice and transcription by the tokens or audio minutes each report
-                  counted, thinking as output; call time at ${summary.pricing.anam_per_minute.toFixed(2)} a minute, billed
-                  by the second. GPU renderers (Ditto, FlashHead, Wav2Lip) are not priced; calls before usage logging are
-                  priced from approximate seconds with no model usage.
-                  {totals?.cost?.partial ? " Some usage is on a model with no known price and is left out." : ""}
-                </>
-              ) : null}
-            </p>
           ) : null}
 
           {summary && summary.groups.length > 0 ? (
@@ -349,7 +256,7 @@ export default function UsagePage() {
               <div className="lu-section-head">
                 <h2>Breakdown</h2>
                 <div className="lu-pills" role="group" aria-label="Group by">
-                  {groupOptions.map((g) => (
+                  {GROUPS.map((g) => (
                     <button key={g.value} type="button" aria-pressed={groupBy === g.value}
                       className={`l-voice-filter-pill${groupBy === g.value ? " l-voice-filter-active" : ""}`}
                       onClick={() => setGroupBy(g.value)}>
@@ -362,13 +269,9 @@ export default function UsagePage() {
                 <table className="lu-table lu-breakdown">
                   <thead>
                     <tr>
-                      <th>{groupOptions.find((g) => g.value === groupBy)?.label}</th>
+                      <th>{GROUPS.find((g) => g.value === groupBy)?.label}</th>
                       <th className="lu-num">Calls</th>
                       <th className="lu-num">Call time</th>
-                      {isAdmin ? <th className="lu-num">Input</th> : null}
-                      {isAdmin ? <th className="lu-num">Output</th> : null}
-                      <th className="lu-num">Charge</th>
-                      {showCost ? <th className="lu-num">Est. cost</th> : null}
                       <th className="lu-num">Failed</th>
                     </tr>
                   </thead>
@@ -376,13 +279,9 @@ export default function UsagePage() {
                     {summary.groups.map((g) => (
                       <tr key={`${g.key}`}>
                         <td>{groupBy === "kind" && g.key ? kindLabel(g.key) : g.label}</td>
-                        <td className="lu-num">{formatTokens(g.calls)}</td>
+                        <td className="lu-num">{formatCount(g.calls)}</td>
                         <td className="lu-num">{formatMinutes(g.call_seconds)}</td>
-                        {isAdmin ? <td className="lu-num">{formatTokens(g.input_tokens)}</td> : null}
-                        {isAdmin ? <td className="lu-num">{formatTokens(g.output_tokens)}</td> : null}
-                        <td className="lu-num">{formatCharge(g.charge)}</td>
-                        {showCost ? <td className="lu-num">{formatCost(g.cost)}</td> : null}
-                        <td className="lu-num">{g.failed + g.lost > 0 ? formatTokens(g.failed + g.lost) : "—"}</td>
+                        <td className="lu-num">{g.failed + g.lost > 0 ? formatCount(g.failed + g.lost) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -394,7 +293,7 @@ export default function UsagePage() {
           <section className="lu-section" aria-label="Calls">
             <div className="lu-section-head">
               <h2>Calls</h2>
-              <span className="lu-count">{formatTokens(total)} in this period</span>
+              <span className="lu-count">{formatCount(total)} in this period</span>
             </div>
             {items.length === 0 ? (
               <div className="l-empty-state">
@@ -407,52 +306,33 @@ export default function UsagePage() {
                   <thead>
                     <tr>
                       <th>Started</th>
-                      <th>{showClient ? "Client · Agent" : "Agent"}</th>
+                      <th>Agent</th>
                       <th>Type</th>
                       <th className="lu-num">Call time</th>
-                      {isAdmin ? <th className="lu-num">Input</th> : null}
-                      {isAdmin ? <th className="lu-num">Output</th> : null}
-                      <th className="lu-num">Charge</th>
-                      {showCost ? <th className="lu-num">Est. cost</th> : null}
                       <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((c) => (
                       <Fragment key={c.id}>
-                        <tr className={`lu-row${open === c.id ? " lu-row-open" : ""}`} onClick={() => void toggle(c)}>
+                        <tr className={`lu-row${open === c.id ? " lu-row-open" : ""}`} onClick={() => setOpen(open === c.id ? null : c.id)}>
                           <td>
                             <button type="button" className="lu-expand" aria-expanded={open === c.id}
                               aria-label={`Details for the call started ${c.started_at ?? ""}`}
-                              onClick={(e) => { e.stopPropagation(); void toggle(c); }}>
+                              onClick={(e) => { e.stopPropagation(); setOpen(open === c.id ? null : c.id); }}>
                               {c.started_at ? new Date(c.started_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—"}
                             </button>
                           </td>
-                          <td>
-                            {showClient ? <div className="lu-sub">{c.client_company || c.client_email}</div> : null}
-                            {c.agent_name ?? "(deleted agent)"}
-                          </td>
-                          <td>
-                            <span className={`lu-kind lu-kind-${c.kind}`}>{kindLabel(c.kind)}</span>
-                            {isAdmin && c.renderer && c.renderer !== "anam" ? <div className="lu-sub">{c.renderer}</div> : null}
-                          </td>
-                          <td className="lu-num">
-                            {formatSeconds(c.call_seconds)}
-                            {isAdmin && c.flags.includes("anam_mismatch") ? <div className="lu-sub lu-warn">differs from the reported time</div> : null}
-                          </td>
-                          {isAdmin ? <td className="lu-num">{hasTokens(c) ? formatTokens(c.input_tokens) : "—"}</td> : null}
-                          {isAdmin ? <td className="lu-num">{hasTokens(c) ? formatTokens(c.output_tokens) : "—"}</td> : null}
-                          <td className="lu-num">{formatCharge(c.charge)}</td>
-                          {showCost ? <td className="lu-num">{formatCost(c.cost)}</td> : null}
+                          <td>{c.agent_name ?? "(deleted agent)"}</td>
+                          <td><span className={`lu-kind lu-kind-${c.kind}`}>{kindLabel(c.kind)}</span></td>
+                          <td className="lu-num">{formatSeconds(c.call_seconds)}</td>
                           <td>
                             <span className={`l-status-badge ${statusBadgeClass(c.status)}`}>{statusLabel(c.status)}</span>
                           </td>
                         </tr>
                         {open === c.id ? (
                           <tr className="lu-detail-row">
-                            <td colSpan={6 + (isAdmin ? 2 : 0) + (showCost ? 1 : 0)}>
-                              <CallDetail call={c} events={details[c.id]} showCost={showCost} isAdmin={isAdmin} />
-                            </td>
+                            <td colSpan={5}><CallDetail call={c} /></td>
                           </tr>
                         ) : null}
                       </Fragment>
@@ -464,7 +344,7 @@ export default function UsagePage() {
             {items.length < total ? (
               <div className="lu-more">
                 <button type="button" className="l-btn l-btn-ghost" onClick={() => void loadMore()} disabled={loadingMore}>
-                  {loadingMore ? "Loading…" : `Show more (${formatTokens(total - items.length)} left)`}
+                  {loadingMore ? "Loading…" : `Show more (${formatCount(total - items.length)} left)`}
                 </button>
               </div>
             ) : null}
@@ -486,82 +366,20 @@ function Stat({ label, value, sub, warn }: { label: string; value: string; sub?:
   );
 }
 
-function CallDetail({ call, events, showCost, isAdmin }: {
-  call: UsageItem;
-  events: Detail | undefined;
-  showCost: boolean;
-  isAdmin: boolean;
-}) {
-  const tokens = isAdmin && hasTokens(call);
+function CallDetail({ call }: { call: UsageItem }) {
   return (
     <div className="lu-detail">
       <dl className="lu-facts">
-        {showCost && call.cost ? (
-          <div><dt>Estimated cost</dt><dd>{formatCost(call.cost)} <span className="lu-sub">(Gemini {formatUsd(call.cost.llm)} · Call {formatUsd(call.cost.anam)})</span>
-            {call.cost.partial ? <div className="lu-sub lu-warn">some usage has no known price</div> : null}</dd></div>
-        ) : null}
-        <div><dt>Charge</dt><dd>{formatCharge(call.charge)} <span className="lu-sub">({formatSeconds(call.call_seconds)} of call time)</span></dd></div>
         <div><dt>How it ended</dt><dd>{call.status === "active" ? "Still running" : endReasonLabel(call.end_reason)}</dd></div>
         <div><dt>Call length</dt><dd>{formatSeconds(call.duration_seconds)}</dd></div>
-        {isAdmin && call.renderer === "anam" ? (
-          <>
-            <div><dt>Call time (ours)</dt><dd>{formatSeconds(call.renderer_seconds)}</dd></div>
-            <div><dt>Call time (billed)</dt><dd>{call.anam_seconds_billed == null ? "not reported yet" : formatSeconds(call.anam_seconds_billed)}</dd></div>
-          </>
-        ) : isAdmin ? (
-          <div><dt>Renderer time</dt><dd>{formatSeconds(call.renderer_seconds)}</dd></div>
-        ) : null}
         <div><dt>Pipeline</dt><dd>{call.pipeline === "cascade" ? "Cascade" : "Gemini Live"}{call.model ? ` · ${call.model.replace("models/", "")}` : ""}</dd></div>
         <div><dt>Voice</dt><dd>{call.voice ?? "—"}</dd></div>
         {call.origin ? <div><dt>Page</dt><dd>{call.origin}</dd></div> : null}
-        {isAdmin && tokens ? (
-          <>
-            <div><dt>Input</dt><dd>{formatTokens(call.input_tokens)} <span className="lu-sub">({formatTokens(call.input_audio_tokens)} audio)</span></dd></div>
-            <div><dt>Output</dt><dd>{formatTokens(call.output_tokens)} <span className="lu-sub">({formatTokens(call.output_audio_tokens)} audio)</span></dd></div>
-            <div><dt>Thinking</dt><dd>{formatTokens(call.thought_tokens)}</dd></div>
-            <div><dt>Responses · tools</dt><dd>{call.generations} · {call.tool_calls}</dd></div>
-          </>
-        ) : isAdmin ? (
-          <div><dt>Tokens</dt><dd>{call.source === "backfill" ? "not recorded (before usage logging)" : "not recorded: this renderer's brain runs on the GPU side"}</dd></div>
-        ) : null}
+        <div><dt>Tool calls</dt><dd>{formatCount(call.tool_calls)}</dd></div>
       </dl>
-      {isAdmin && call.error ? <div className="lu-error lu-error-inline" role="note">{call.error}</div> : null}
       {call.flags.length > 0 ? (
-        <div className="lu-flags">{call.flags.map((f) => <span key={f} className="lu-flag">{flagLabel(f)}</span>)}</div>
-      ) : null}
-      {tokens ? (
-        events === "loading" || events === undefined ? <div className="lu-sub">Loading reports…</div>
-          : events === "error" ? <div className="lu-sub lu-warn">Could not load the reports.</div>
-          : events.length === 0 ? <div className="lu-sub">No model reports were recorded for this call.</div> : (
-            <div className="lu-table-wrap">
-              <table className="lu-table lu-events">
-                <thead>
-                  <tr><th>#</th><th>Part</th><th className="lu-num">Input text</th><th className="lu-num">Input audio</th>
-                    <th className="lu-num">Output</th><th className="lu-num">Thinking</th><th className="lu-num">Total</th>
-                    {showCost ? <th className="lu-num">Est. cost</th> : null}</tr>
-                </thead>
-                <tbody>
-                  {events.map((e) => (
-                    <tr key={e.seq}>
-                      <td>{e.seq}</td>
-                      <td>{partLabel(e.component)}</td>
-                      <td className="lu-num">{formatTokens(e.input_text_tokens + e.input_other_tokens)}</td>
-                      <td className="lu-num">{formatTokens(e.input_audio_tokens)}</td>
-                      <td className="lu-num">{formatTokens(e.output_text_tokens + e.output_audio_tokens + e.output_other_tokens)}</td>
-                      <td className="lu-num">{formatTokens(e.thought_tokens)}</td>
-                      <td className="lu-num">{e.component === "stt" && e.audio_seconds ? `${e.audio_seconds.toFixed(1)} s audio` : formatTokens(e.total_tokens)}</td>
-                      {showCost ? <td className="lu-num">{e.est_cost === undefined ? "—" : e.est_cost === null ? "no price" : formatUsd(e.est_cost)}</td> : null}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+        <div className="lu-flags">{call.flags.map((f) => <span key={f} className="lu-flag">{f === "lost" ? "Lost" : "Failed"}</span>)}</div>
       ) : null}
     </div>
   );
-}
-
-function partLabel(component: string): string {
-  return ({ live: "Gemini Live", llm: "Language model", tts: "Speech", stt: "Transcription" } as Record<string, string>)[component] ?? component;
 }

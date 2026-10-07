@@ -7,15 +7,19 @@ const API_TOKEN = process.env.AVATAR_STUDIO_API_TOKEN || "";
 /**
  * The usage API is per signed-in client: the browser never talks to the backend, the Next server does,
  * with the shared token and the client id from the session (same shape as the other /api routes).
- * The query string (filters, paging, scope) is passed through untouched; the backend decides what
- * this client may see.
+ * The query string (filters, paging) is passed on, EXCEPT `scope` and `client_id`: this app only ever shows the signed-in
+ * client's own usage, even when that client is an administrator. Every client's usage is the admin dashboard's
+ * (avatar-studio-admin), so a hand-made URL cannot turn this page into one.
  */
 export async function proxyUsage(request: Request, backendPath: string, opts: { text?: boolean } = {}) {
   const session = await auth();
   if (!session?.clientId) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
-  const search = new URL(request.url).search;
+  const params = new URL(request.url).searchParams;
+  params.delete("scope");
+  params.delete("client_id");
+  const search = params.toString() ? `?${params.toString()}` : "";
   const res = await fetch(`${API_URL}${backendPath}${search}`, {
     headers: { Authorization: `Bearer ${API_TOKEN}`, "X-Avatar-Studio-Client-Id": session.clientId },
     cache: "no-store",

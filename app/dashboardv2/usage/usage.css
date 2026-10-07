@@ -117,7 +117,9 @@
   margin-bottom: 28px;
 }
 
-.landing .lu-stat {
+.landing .lu-totals-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.lu-stat {
   background: var(--l-bg-raised);
   border: 1px solid var(--l-border);
   border-radius: var(--l-radius);
@@ -326,6 +328,11 @@
 @media (max-width: 900px) {
   .landing .lu-totals {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* three cards on two columns: the last one takes the whole row rather than sitting alone on the left */
+  .landing .lu-totals-three .lu-stat:last-child {
+    grid-column: 1 / -1;
   }
 
   .landing .lu-export {
