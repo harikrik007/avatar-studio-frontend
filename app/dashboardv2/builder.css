@@ -1006,6 +1006,34 @@
   color: var(--fg);
 }
 
+/* The system prompt in a large editor: nearly the whole window, one big text area. */
+.landing .lb-dialog-wide {
+  width: min(1100px, calc(100vw - 32px));
+  height: min(880px, calc(100vh - 32px));
+}
+
+.landing .lb-dialog-wide .lb-dialog-inner {
+  height: 100%;
+}
+
+.landing .lb-dialog textarea.lb-prompt-big {
+  flex: 1;
+  min-height: 0;
+  width: auto;
+  margin: 4px 20px 14px;
+  resize: none;
+  line-height: 1.6;
+  font-size: 15px;
+  tab-size: 2;
+}
+
+.landing .lb-prompt-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .landing .lb-dialog-body {
   flex: 1;
   min-height: 0;

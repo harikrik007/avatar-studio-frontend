@@ -74,3 +74,9 @@ export const XIcon = (p: IconProps) => (
     <path d="m4 4 8 8M12 4l-8 8" />
   </Svg>
 );
+
+export const ExpandIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9" />
+  </Svg>
+);

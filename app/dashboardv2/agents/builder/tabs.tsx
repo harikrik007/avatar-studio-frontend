@@ -11,6 +11,8 @@ import { VOICE_CATALOG, VOICE_FILTERS, matchesVoiceFilter, voiceName, type Voice
 import type { ClientTool, Tool } from "@/lib/tools/model";
 import { DOC_EXTENSIONS, formatDocMeta, type AgentDocument, type Avatar } from "../shared";
 import type { AgentForm } from "../useAgentForm";
+import PromptDialog from "./PromptDialog";
+import { ExpandIcon } from "./tools/icons";
 
 /* ------------------------------------------------------------------ */
 /* building blocks                                                    */
@@ -88,6 +90,20 @@ export function Switch({
 /* ------------------------------------------------------------------ */
 
 export function PromptTab({ f, nameRef }: { f: AgentForm; nameRef: React.RefObject<HTMLInputElement | null> }) {
+  // The system prompt can be long: the small field is for a quick look, the dialog for writing it.
+  const promptRef = useRef<HTMLTextAreaElement>(null);
+  const [bigPrompt, setBigPrompt] = useState<{ caret: number } | null>(null);
+  // Back to the small field once the dialog is gone: while it is open the page behind it is inert and cannot take focus.
+  const back = useRef<number | null>(null);
+  useEffect(() => {
+    if (bigPrompt || back.current === null) return;
+    const t = promptRef.current;
+    if (t) {
+      t.focus();
+      t.setSelectionRange(back.current, back.current);
+    }
+    back.current = null;
+  }, [bigPrompt]);
   return (
     <>
       <SectionCard n={1} title="Agent name">
@@ -115,14 +131,41 @@ export function PromptTab({ f, nameRef }: { f: AgentForm; nameRef: React.RefObje
           generic, improvised greeting instead.
         </p>
       </SectionCard>
-      <SectionCard n={3} title="System prompt">
+      <SectionCard
+        n={3}
+        title="System prompt"
+        action={
+          <button
+            type="button"
+            className="lb-icon-btn"
+            aria-label="Open the system prompt in a large editor"
+            title="Open in a large editor"
+            onClick={() => setBigPrompt({ caret: promptRef.current?.selectionStart ?? f.form.systemPrompt.length })}
+          >
+            <ExpandIcon size={16} />
+          </button>
+        }
+      >
         <textarea
+          ref={promptRef}
           className="lb-input lb-textarea-tall"
           value={f.form.systemPrompt}
           onChange={(e) => f.update("systemPrompt", e.target.value)}
           placeholder="You are a friendly front desk assistant for Acme Dental. Help visitors check appointment availability and answer questions about the clinic."
         />
       </SectionCard>
+      {bigPrompt ? (
+        <PromptDialog
+          value={f.form.systemPrompt}
+          onChange={(v) => f.update("systemPrompt", v)}
+          agentName={f.form.name}
+          caret={bigPrompt.caret}
+          onClose={(caret) => {
+            back.current = caret;
+            setBigPrompt(null);
+          }}
+        />
+      ) : null}
       <SectionCard n={4} title="Knowledge">
         <p className="lb-help" style={{ marginTop: 0 }}>
           Menus, price lists, policies, FAQs. The agent answers from these and won&apos;t invent
