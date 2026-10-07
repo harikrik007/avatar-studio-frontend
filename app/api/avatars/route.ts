@@ -8,16 +8,14 @@ import { auth } from "@/auth";
 const API_URL = process.env.AVATAR_STUDIO_API_URL || "http://127.0.0.1:8095";
 const API_TOKEN = process.env.AVATAR_STUDIO_API_TOKEN || "";
 
-export async function GET(request: Request) {
+export async function GET() {
   const session = await auth();
   if (!session?.clientId) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 
-  // `?refresh=true` makes the backend read Anam's catalogue again and wait for it before answering (the avatar wizard,
-  // a tab regaining focus): a face deleted in Anam's lab is then gone from the very next list.
-  const refresh = new URL(request.url).searchParams.get("refresh") === "true" ? "?refresh=true" : "";
-  const res = await fetch(`${API_URL}/avatars${refresh}`, {
+  // The list is the database's: an administrator's Sync in the admin dashboard is what reads Anam, never this request.
+  const res = await fetch(`${API_URL}/avatars`, {
     headers: {
       Authorization: `Bearer ${API_TOKEN}`,
       "X-Avatar-Studio-Client-Id": session.clientId,

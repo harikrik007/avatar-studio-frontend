@@ -16,8 +16,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DEFAULT_VOICE } from "@/lib/voices";
 import type { Tool } from "@/lib/tools/model";
-import { HOSTED_PROVIDERS, type Agent, type Avatar } from "./shared";
-import { useAvatarSync } from "./useAvatarSync";
+import { isPickable, type Agent, type Avatar } from "./shared";
 
 export type AgentFormState = {
   name: string;
@@ -67,22 +66,9 @@ export function useAgentForm(agentId?: string) {
   const [statusError, setStatusError] = useState<string | null>(null);
 
   const pickable = useMemo(
-    () => avatars.filter((a) => HOSTED_PROVIDERS.has(a.provider ?? "") && a.status === "ready"),
+    () => avatars.filter(isPickable),
     [avatars]
   );
-
-  // The list above is the database's. Once it is on screen the backend is asked to read Anam's catalogue again (and
-  // again when the tab regains focus), so a face deleted in Anam's lab leaves the picker without a reload. In create
-  // mode the face a new agent starts on moves along if it was the one that went.
-  useAvatarSync(loaded, (list) => {
-    setAvatars(list);
-    if (!isCreate) return;
-    const offered = list.filter((a) => HOSTED_PROVIDERS.has(a.provider ?? "") && a.status === "ready");
-    const ids = new Set(offered.map((a) => a.id));
-    const fallback = offered[0]?.id ?? "";
-    setForm((f) => (ids.has(f.avatarId) ? f : { ...f, avatarId: fallback }));
-    setBaseline((b) => (ids.has(b.avatarId) ? b : { ...b, avatarId: fallback }));
-  });
 
   const fetchAgent = useCallback(async (): Promise<Agent | null> => {
     if (!agentId) return null;
@@ -101,7 +87,7 @@ export function useAgentForm(agentId?: string) {
       setAvatars(list);
       if (isCreate) {
         // Same default as the old create form: the first hosted avatar.
-        const first = list.find((a) => HOSTED_PROVIDERS.has(a.provider ?? "") && a.status === "ready");
+        const first = list.find(isPickable);
         const initial = { ...EMPTY, avatarId: first?.id ?? "" };
         setForm(initial);
         setBaseline(initial);

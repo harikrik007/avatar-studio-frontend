@@ -26,6 +26,9 @@ export type Avatar = {
   // Measured from that still: only a face shot against a green screen can
   // be shown with its background removed.
   supports_transparency?: boolean;
+  // false: an administrator no longer offers this face to this client, but the client's agents already use it. Show it on
+  // those agents; do not offer it in a picker. Absent (an older backend) means offered.
+  selectable?: boolean;
 };
 
 export type AgentDocument = {
@@ -90,6 +93,11 @@ export const DOC_EXTENSIONS = ".pdf,.txt,.md,.csv,.docx";
 // otherwise, and only a local .env.local sets it, e.g. NEXT_PUBLIC_AVATAR_PROVIDERS=anam,ditto,flashhead
 // (Railway has no such variable). It is read at build time. Agents already built on another provider keep working;
 // they are just not offered in the picker.
+/** Can this avatar be offered when building an agent: a provider this build offers, ready, and not withdrawn from this client. */
+export function isPickable(a: Avatar): boolean {
+  return HOSTED_PROVIDERS.has(a.provider ?? "") && a.status === "ready" && a.selectable !== false;
+}
+
 export const HOSTED_PROVIDERS = new Set(
   (process.env.NEXT_PUBLIC_AVATAR_PROVIDERS || "anam")
     .split(",")

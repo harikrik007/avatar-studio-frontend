@@ -16,8 +16,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import FlowRail from "../FlowRail";
 import { AvatarThumb, RowChevron, SkeletonRows } from "../ui";
-import { HOSTED_PROVIDERS, agentStatusBadgeClass, agentStatusLabel, type Agent, type Avatar } from "./shared";
-import { useAvatarSync } from "./useAvatarSync";
+import { agentStatusBadgeClass, agentStatusLabel, isPickable, type Agent, type Avatar } from "./shared";
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -55,10 +54,6 @@ export default function AgentsPage() {
     void loadAvatars();
   }, [loadAgents, loadAvatars]);
 
-  // The avatars above are the database's; once they are shown, ask the backend to read Anam's catalogue again (and again
-  // when the tab regains focus) so a face deleted in Anam's lab stops showing here without a reload.
-  useAvatarSync(avatarsLoaded, setAvatars);
-
   // Status is server-derived; a provisioning agent is polled until it settles. Only the agents are
   // polled: the avatar list does not change while one provisions.
   useEffect(() => {
@@ -68,7 +63,7 @@ export default function AgentsPage() {
   }, [agents, loadAgents]);
 
   // The hosted catalogue (see HOSTED_PROVIDERS): shared, always ready, nothing to create.
-  const readyAvatars = avatars.filter((a) => HOSTED_PROVIDERS.has(a.provider ?? "") && a.status === "ready");
+  const readyAvatars = avatars.filter(isPickable);
 
   return (
     <div className="l-dash-shell">
