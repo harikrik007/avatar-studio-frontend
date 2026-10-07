@@ -17,6 +17,8 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const publicKey = typeof body.public_key === "string" ? body.public_key : "";
   const origin = typeof body.origin === "string" ? body.origin : undefined;
+  // The landscape render, for a page where the avatar floats free. Only this one value is passed on.
+  const frame = body.frame === "wide" ? "wide" : undefined;
   if (!publicKey) {
     return NextResponse.json({ error: "Missing public_key." }, { status: 400 });
   }
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
   const res = await fetch(`${API_URL}/embed/session`, {
     method: "POST",
     headers: { Authorization: `Bearer ${API_TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ public_key: publicKey, origin }),
+    body: JSON.stringify({ public_key: publicKey, origin, frame }),
     cache: "no-store",
   });
   const payload = await res.json().catch(() => ({}));

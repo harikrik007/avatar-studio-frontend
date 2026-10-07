@@ -218,7 +218,12 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
           else setStatus("error");
         },
       },
-      { sessionUrl: "/api/embed/session", sessionBody: { public_key: p.key, origin: window.location.origin } }
+      {
+        sessionUrl: "/api/embed/session",
+        // A face that floats free gets the landscape render (the idle picture's own shape: full shoulders, no zoom jump when the
+        // call connects). A face in a portrait card keeps the portrait one.
+        sessionBody: { public_key: p.key, origin: window.location.origin, ...(p.greenScreen ? { frame: "wide" } : {}) },
+      }
     );
     sessionRef.current = session;
     roomRef.current = session.room.name;
