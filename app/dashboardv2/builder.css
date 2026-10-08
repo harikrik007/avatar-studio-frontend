@@ -680,6 +680,57 @@
   white-space: nowrap;
 }
 
+/* Avatar tab: the featured faces, then the avatar library (built-in faces) page by page (2026-10-08) */
+.landing .lb-lib-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.landing .lb-lib-head .lb-group-label { margin-bottom: 8px; }
+.landing .lb-lib { margin-top: 22px; scroll-margin-top: 12px; }
+.landing .lb-lib-count { font-size: 12px; color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+.landing .lb-lib-styles { margin-bottom: 10px; }
+.landing .lb-lib-chip-n { margin-left: 6px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.landing .lb-lib-loading { opacity: 0.55; transition: opacity 0.15s ease; pointer-events: none; }
+.landing .lb-avatar-take {
+  max-width: 100%;
+  margin-top: -4px;
+  font-size: 11px;
+  color: var(--fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.landing .lb-pager-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+.landing .lb-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.landing .lb-pager-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.landing .lb-pager-num { padding: 0 6px; font-variant-numeric: tabular-nums; }
+.landing .lb-pager-btn:hover:not(:disabled) { border-color: rgba(223, 248, 255, 0.28); }
+.landing .lb-pager-btn:disabled { opacity: 0.4; cursor: default; }
+.landing .lb-pager-on,
+.landing .lb-pager-on:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--l-accent-ink, #0e404f); }
+.landing .lb-pager-gap { padding: 0 2px; color: var(--fg-subtle); }
+.landing .lb-pager-range { font-size: 12px; color: var(--fg-subtle); font-variant-numeric: tabular-nums; }
+
 .landing .lb-badge-green {
   font-size: 9.5px;
   font-weight: 700;

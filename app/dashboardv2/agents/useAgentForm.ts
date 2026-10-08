@@ -73,10 +73,17 @@ export function useAgentForm(agentId?: string) {
   const [error, setError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
 
+  // The featured faces. The avatar library (the built-in faces) is listed page by page in the Avatar tab, not from this list,
+  // which carries a library face only when this agent or another of the client's already uses it (or one was just picked).
   const pickable = useMemo(
-    () => avatars.filter(isPickable),
+    () => avatars.filter((a) => isPickable(a) && !a.library),
     [avatars]
   );
+
+  /** Keep a face picked from a library page, so the preview, the header and the Tools tab know it after its page is left. */
+  const rememberAvatar = useCallback((a: Avatar) => {
+    setAvatars((list) => (list.some((x) => x.id === a.id) ? list : [...list, a]));
+  }, []);
 
   const fetchAgent = useCallback(async (): Promise<Agent | null> => {
     if (!agentId) return null;
@@ -95,7 +102,7 @@ export function useAgentForm(agentId?: string) {
       setAvatars(list);
       if (isCreate) {
         // Same default as the old create form: the first hosted avatar.
-        const first = list.find(isPickable);
+        const first = list.find((a) => isPickable(a) && !a.library) ?? list.find(isPickable);
         const initial = { ...EMPTY, avatarId: first?.id ?? "" };
         setForm(initial);
         setBaseline(initial);
@@ -257,6 +264,7 @@ export function useAgentForm(agentId?: string) {
     agent,
     avatars,
     pickable,
+    rememberAvatar,
     selectedAvatar,
     loaded,
     loadError,

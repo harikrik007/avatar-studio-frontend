@@ -29,7 +29,35 @@ export type Avatar = {
   // false: an administrator no longer offers this face to this client, but the client's agents already use it. Show it on
   // those agents; do not offer it in a picker. Absent (an older backend) means offered.
   selectable?: boolean;
+  // One of the built-in faces of the avatar library (listed page by page from /api/avatars/library, after the featured ones),
+  // and how the library describes it: which take of the person ("desk", "window sofa") and its look.
+  library?: boolean;
+  variant_name?: string | null;
+  render_style?: string | null;
 };
+
+const STYLE_LABELS: Record<string, string> = { realistic: "Realistic", illustrated: "Illustrated", animated_3d: "3D" };
+
+/** The library's looks, in the order the style filter shows them; "" is all of them. */
+export const LIBRARY_STYLES: { value: string; label: string }[] = [
+  { value: "", label: "All" },
+  ...Object.entries(STYLE_LABELS).map(([value, label]) => ({ value, label })),
+];
+
+/** What tells one library face from the others of the same person: the take ("Window desk"), or else its look ("Illustrated").
+ *  Null for a featured face. */
+export function avatarTake(a: Avatar): string | null {
+  if (!a.library) return null;
+  const take = (a.variant_name ?? "").replace(/_/g, " ").trim();
+  if (take && take.toLowerCase() !== (a.render_style ?? "").replace(/_/g, " ").toLowerCase()) return take[0].toUpperCase() + take.slice(1);
+  return STYLE_LABELS[a.render_style ?? ""] ?? null;
+}
+
+/** A face's name with its take, for headings and labels: "Cara · Window desk". */
+export function avatarLabel(a: Pick<Avatar, "name"> & Partial<Avatar>): string {
+  const take = avatarTake(a as Avatar);
+  return take ? `${a.name} · ${take}` : a.name;
+}
 
 export type AgentDocument = {
   id: string;

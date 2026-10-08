@@ -16,11 +16,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import FlowRail from "../FlowRail";
 import { AvatarThumb, RowChevron, SkeletonRows } from "../ui";
-import { agentStatusBadgeClass, agentStatusLabel, isPickable, type Agent, type Avatar } from "./shared";
+import { agentStatusBadgeClass, agentStatusLabel, avatarLabel, isPickable, type Agent, type Avatar } from "./shared";
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [avatars, setAvatars] = useState<Avatar[]>([]);
+  const [libraryTotal, setLibraryTotal] = useState(0);
   // Distinguishes "still loading" from "genuinely empty" -- the empty state
   // used to flash on every page load before the first fetch resolved.
   const [loaded, setLoaded] = useState(false);
@@ -41,8 +42,11 @@ export default function AgentsPage() {
 
   const loadAvatars = useCallback(async () => {
     try {
-      const res = await fetch("/api/avatars");
+      // The featured faces (and any library face an agent uses), plus how many the avatar library offers: the empty state
+      // says there is nothing to build on only when both are empty.
+      const [res, lib] = await Promise.all([fetch("/api/avatars"), fetch("/api/avatars/library?per_page=1").catch(() => null)]);
       if (res.ok) setAvatars(await res.json());
+      if (lib?.ok) setLibraryTotal(Number((await lib.json())?.counts?.all ?? 0));
     } catch {
       // thumbnails stay as placeholders
     }
@@ -64,6 +68,7 @@ export default function AgentsPage() {
 
   // The hosted catalogue (see HOSTED_PROVIDERS): shared, always ready, nothing to create.
   const readyAvatars = avatars.filter(isPickable);
+  const nothingToBuildOn = readyAvatars.length === 0 && libraryTotal === 0;
 
   return (
     <div className="l-dash-shell">
@@ -81,7 +86,7 @@ export default function AgentsPage() {
         <SkeletonRows />
       ) : agents.length === 0 ? (
         <div className="l-empty-state">
-          {readyAvatars.length === 0 ? (
+          {nothingToBuildOn ? (
             <>
               <h2>No avatars available</h2>
               <p>
@@ -133,7 +138,7 @@ function AgentRow({ agent, avatars, avatarsLoaded }: { agent: Agent; avatars: Av
         <div className="l-avatar-info">
           <div className="l-avatar-name">{agent.name}</div>
           <div className="l-avatar-meta">
-            {avatar ? avatar.name : avatarsLoaded ? "Unknown avatar" : "…"} — {agent.tools_json.length} tool
+            {avatar ? avatarLabel(avatar) : avatarsLoaded ? "Unknown avatar" : "…"} — {agent.tools_json.length} tool
             {agent.tools_json.length === 1 ? "" : "s"}
             {agent.documents?.length
               ? ` · ${agent.documents.length} knowledge file${agent.documents.length === 1 ? "" : "s"}`

@@ -17,7 +17,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { voiceById, voiceName } from "@/lib/voices";
 import { Spinner } from "../../ui";
-import { LiveTestPanel } from "../shared";
+import { LiveTestPanel, avatarLabel } from "../shared";
 import { useAgentForm, type AgentForm } from "../useAgentForm";
 import { isCustom } from "@/lib/tools/model";
 import { AdvancedTab, AvatarTab, Chevron, EmbedTab, PromptTab, VoiceTab } from "./tabs";
@@ -464,7 +464,7 @@ function PreviewPanel({
         <div className="lb-chips">
           <button type="button" className="lb-chip" onClick={() => onJump("avatar")}>
             <span className="lb-chip-label">Avatar</span>
-            <span className="lb-chip-value">{avatar?.name ?? "—"}</span>
+            <span className="lb-chip-value">{avatar ? avatarLabel(avatar) : "—"}</span>
           </button>
           <button type="button" className="lb-chip" onClick={() => onJump("voice")}>
             <span className="lb-chip-label">Voice</span>

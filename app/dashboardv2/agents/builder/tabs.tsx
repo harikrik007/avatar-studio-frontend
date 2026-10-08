@@ -9,9 +9,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { VOICE_CATALOG, VOICE_FILTERS, matchesVoiceFilter, voiceName, type VoiceFilter } from "@/lib/voices";
 import type { ClientTool, Tool } from "@/lib/tools/model";
-import { DOC_EXTENSIONS, formatDocMeta, type AgentDocument, type Avatar, type Orientation } from "../shared";
+import { DOC_EXTENSIONS, avatarLabel, formatDocMeta, type AgentDocument, type Orientation } from "../shared";
 import type { AgentForm } from "../useAgentForm";
 import PromptDialog from "./PromptDialog";
+import { AvatarCard, AvatarLibrary } from "./AvatarLibrary";
 import { ExpandIcon } from "./tools/icons";
 
 /* ------------------------------------------------------------------ */
@@ -356,15 +357,39 @@ export function AvatarTab({ f }: { f: AgentForm }) {
           placeholder="Search avatars by name…"
           aria-label="Search avatars"
         />
-        <div className="lb-avatar-grid" role="radiogroup" aria-label="Avatar">
-          {!f.loaded
-            ? Array.from({ length: 6 }, (_, i) => <div key={i} className="lb-avatar-card lb-skeleton" aria-hidden="true" />)
-            : shown.map((a) => (
-                <AvatarCard key={a.id} avatar={a} selected={a.id === f.form.avatarId} onSelect={() => f.update("avatarId", a.id)} />
-              ))}
-        </div>
-        {f.loaded && shown.length === 0 ? (
-          <p className="lb-help">{f.pickable.length === 0 ? "No avatars are available on this environment yet." : "No avatar matches that name."}</p>
+        {/* The featured faces first; the avatar library (built-in faces, page by page) after them. A search that leaves no
+            featured face shows only the library. */}
+        {!f.loaded || shown.length > 0 ? (
+          <>
+            {f.loaded ? (
+              <div className="lb-lib-head">
+                <span className="lb-group-label">Featured</span>
+              </div>
+            ) : null}
+            <div className="lb-avatar-grid" role="radiogroup" aria-label="Featured avatars">
+              {!f.loaded
+                ? Array.from({ length: 6 }, (_, i) => <div key={i} className="lb-avatar-card lb-skeleton" aria-hidden="true" />)
+                : shown.map((a) => (
+                    <AvatarCard key={a.id} avatar={a} selected={a.id === f.form.avatarId} onSelect={() => f.update("avatarId", a.id)} />
+                  ))}
+            </div>
+          </>
+        ) : query.trim() && f.pickable.length > 0 ? (
+          <p className="lb-help">No featured avatar matches that name.</p>
+        ) : null}
+        {f.loaded ? (
+          <AvatarLibrary
+            query={query}
+            selectedId={f.form.avatarId}
+            // where the library opens: on the agent's own face, if that is a library face (read when the library mounts,
+            // which is once the avatars have loaded)
+            startAround={selected?.library ? selected.id : undefined}
+            whenEmpty={f.pickable.length === 0 ? <p className="lb-help">No avatars are available on this environment yet.</p> : null}
+            onPick={(a) => {
+              f.rememberAvatar(a);
+              f.update("avatarId", a.id);
+            }}
+          />
         ) : null}
         {f.agent?.status === "live" && f.form.avatarId !== f.agent.avatar_id ? (
           <p className="lb-help">
@@ -421,7 +446,7 @@ export function AvatarTab({ f }: { f: AgentForm }) {
         </p>
         {f.form.transparent && !keyable ? (
           <p className="lb-warn">
-            {selected?.name ? `"${selected.name}"` : "This avatar"} wasn&apos;t shot against a green screen, so
+            {selected?.name ? `"${avatarLabel(selected)}"` : "This avatar"} wasn&apos;t shot against a green screen, so
             there is no background to remove — it will appear in a plain rectangle. Pick an avatar marked{" "}
             <strong>Transparent ready</strong> instead.
           </p>
@@ -432,28 +457,6 @@ export function AvatarTab({ f }: { f: AgentForm }) {
         )}
       </SectionCard>
     </>
-  );
-}
-
-function AvatarCard({ avatar, selected, onSelect }: { avatar: Avatar; selected: boolean; onSelect: () => void }) {
-  return (
-    <button type="button" role="radio" aria-checked={selected} className={`lb-avatar-card${selected ? " lb-avatar-selected" : ""}`} onClick={onSelect}>
-      {avatar.preview_image_url ? (
-        <img className="lb-avatar-img" src={avatar.preview_image_url} alt="" />
-      ) : (
-        <span className="lb-avatar-img lb-avatar-initial" aria-hidden="true">
-          {avatar.name.slice(0, 1).toUpperCase()}
-        </span>
-      )}
-      <span className="lb-avatar-name" title={avatar.name}>
-        {avatar.name}
-      </span>
-      {avatar.supports_transparency ? (
-        <span className="lb-badge-green" title="Shot against a green screen — can be shown with no background">
-          TRANSPARENT READY
-        </span>
-      ) : null}
-    </button>
   );
 }
 
