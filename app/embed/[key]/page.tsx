@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { EmbedWidget } from "@/components/embed-widget";
-import { stillVersion } from "@/lib/embed-still";
+import { proxiedStillPath } from "@/lib/embed-still";
 
 const API_URL = process.env.AVATAR_STUDIO_API_URL || "http://127.0.0.1:8095";
 const API_TOKEN = process.env.AVATAR_STUDIO_API_TOKEN || "";
@@ -17,6 +17,7 @@ type EmbedConfig = {
   transparent?: boolean;
   orientation?: string;
   show_branding?: boolean;
+  portrait_image_url?: string | null;
 };
 
 /**
@@ -90,7 +91,8 @@ export default async function EmbedPage({ params }: { params: Promise<{ key: str
       previewVideoUrl={config.preview_video_url}
       // A frameless widget keys the still on a canvas, which needs the picture with CORS open: the stock faces' image host does not
       // send it (the reason widget.js's closed bubble uses the same proxy), so the picture comes from our own origin.
-      previewImageUrl={config.transparent && config.preview_image_url ? `/api/embed/still/${encodeURIComponent(key)}?v=${stillVersion(config.preview_image_url)}` : config.preview_image_url}
+      // In portrait it is the portrait still, the picture the closed bubble showed (lib/embed-still.ts framePicture).
+      previewImageUrl={config.transparent ? proxiedStillPath(key, config) : config.preview_image_url}
       agentName={config.agent_name ?? undefined}
       transparent={config.transparent ?? false}
       orientation={config.orientation === "landscape" ? "landscape" : "portrait"}

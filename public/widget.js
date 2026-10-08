@@ -492,7 +492,11 @@
               // back to the raw still here at least keeps a real photo on
               // screen rather than nothing.
               transparentAvatarUrl = keyedUrl || config.preview_image_url;
-              closedImgScale = keyedUrl ? heightFraction : 1;
+              // A portrait still (a frameless widget in portrait, 768x1152) is drawn as if the whole picture were FRAMELESS_H
+              // tall: the same screen px per still px as the landscape still at CLOSED_FRAMELESS_H (233/768 = 350/1152), which is
+              // how the open widget draws the portrait call -- so closed and connected stay one figure in portrait too.
+              var tall = srcImg.naturalHeight > srcImg.naturalWidth ? 1.5 : 1;
+              closedImgScale = (keyedUrl ? heightFraction : 1) * tall;
               renderBubble();
               if (panelWrap) {
                 panelWrap.style[isTop ? "top" : "bottom"] = panelOffset() + "px";

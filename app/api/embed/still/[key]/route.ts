@@ -49,8 +49,11 @@ function failure(status: number, message: string) {
   });
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ key: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
+  // ?shape=portrait: the picture a frameless widget in portrait shows (lib/embed-still.ts framePicture) -- still only a URL
+  // the backend holds for this key, never one from the request.
+  const wantPortrait = new URL(request.url).searchParams.get("shape") === "portrait";
 
   let upstream: string | null = null;
   try {
@@ -59,7 +62,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ key
       cache: "no-store",
     });
     if (!res.ok) return failure(res.status === 404 ? 404 : 502, "Unknown widget key.");
-    upstream = ((await res.json()) as { preview_image_url?: string | null }).preview_image_url ?? null;
+    const config = (await res.json()) as { preview_image_url?: string | null; portrait_image_url?: string | null };
+    upstream = (wantPortrait ? config.portrait_image_url : null) ?? config.preview_image_url ?? null;
   } catch {
     return failure(502, "Could not read the widget's configuration.");
   }

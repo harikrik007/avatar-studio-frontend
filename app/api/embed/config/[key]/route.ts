@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { publicOrigin, stillVersion } from "@/lib/embed-still";
+import { proxiedStillPath, publicOrigin } from "@/lib/embed-still";
 
 const API_URL = process.env.AVATAR_STUDIO_API_URL || "http://127.0.0.1:8095";
 const API_TOKEN = process.env.AVATAR_STUDIO_API_TOKEN || "";
@@ -31,11 +31,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ key:
   // host does not send it, so the picture is handed over from our own origin (see app/api/embed/still). The URL
   // is absolute: widget.js on a customer's page, whatever version of it is cached there, loads it as it is.
   // A panel widget just shows the picture and keeps loading it from where it is.
-  const upstream: string | null = config.preview_image_url ?? null;
-  const previewImageUrl =
-    upstream && config.transparent
-      ? `${publicOrigin(request)}/api/embed/still/${encodeURIComponent(key)}?v=${stillVersion(upstream)}`
-      : upstream;
+  // A frameless widget in portrait gets the portrait still (see framePicture).
+  const proxied = config.transparent ? proxiedStillPath(key, config) : null;
+  const previewImageUrl = proxied ? `${publicOrigin(request)}${proxied}` : (config.preview_image_url ?? null);
   return NextResponse.json(
     {
       accent_color: config.accent_color,

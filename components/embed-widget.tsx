@@ -1050,9 +1050,19 @@ function useStillSilhouette(src: string | null | undefined): Silhouette | null {
  * whatever hangs outside the shell (the empty margin, the portrait render's extra torso below the frame) is clipped. */
 function framelessCanvasFor(landscape: boolean, sil: Silhouette | null): React.CSSProperties {
   const w = sil?.w ?? 1152, h = sil?.h ?? 768;
-  const maxX = sil?.maxX ?? Math.round(w * 0.838); // the stock faces' right shoulder, until the picture has been read
-  const s = FRAMELESS_FIGURE_H / h; // screen px per still px: the bubble's scale
+  // A portrait still (768x1152): the widget is in portrait and the page handed it the provider's portrait still, which lines up
+  // 1:1 with the portrait render (measured 2026-10-08) -- the closed bubble showed this same picture.
+  const tall = h > w;
+  const maxX = sil?.maxX ?? Math.round(w * (tall ? 1 : 0.838)); // the stock faces' right shoulder, until the picture has been read
+  // Screen px per still px: the bubble's scale. 233/768 for the landscape still is 350/1152 for the portrait one: one size of her.
+  const s = (FRAMELESS_FIGURE_H * (tall ? 1.5 : 1)) / h;
   const base: React.CSSProperties = { objectFit: "cover", display: "block", filter: "drop-shadow(0 24px 34px rgba(0,0,0,0.34))" };
+  if (tall) {
+    // still and render are the same picture: one 2:3 box, the frame's whole height, nothing hanging below it
+    return { ...base, height: Math.round(h * s * 100) / 100, aspectRatio: `${w} / ${h}`, transform: `translateX(${((w - 1 - maxX) * s).toFixed(2)}px)` };
+  }
+  // Below, the still is the landscape one. A portrait call on it (no portrait still known yet: an avatar not synced since
+  // 2026-10-08) keeps the bubble's landscape figure, with the portrait render's extra torso hanging below the frame.
   if (landscape) {
     return { ...base, height: FRAMELESS_FIGURE_H, aspectRatio: `${w} / ${h}`, transform: `translateX(${((w - 1 - maxX) * s).toFixed(2)}px)` };
   }
