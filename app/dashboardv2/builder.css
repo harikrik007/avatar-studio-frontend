@@ -1827,13 +1827,17 @@
   cursor: not-allowed;
 }
 
-/* live session inside the preview card */
+/* Live session: the frame holds the avatar alone, at exactly the idle picture's size (Hari, 2026-10-08: "only maintain frame size
+   only for avatar"). The outer box stops being the frame -- no border, no fill, the column's full width -- and the video wrap below
+   takes the frame's look; the status bar, the call buttons and the conversation sit under it as cards of their own, as wide as the
+   column, instead of being squeezed into a 400 px portrait frame (where End call ran off the edge). */
 .landing .lb-preview-live {
   aspect-ratio: auto;
   height: auto;
-  /* the session's video is opaque, so the transparency checkerboard would
-     only show through the status bar under it */
-  background: var(--surface-2);
+  border: none;
+  border-radius: 0;
+  background: none;
+  overflow: visible;
 }
 
 .landing .lb-preview .l-live-test {
@@ -1851,6 +1855,11 @@
 .landing .lb-preview .l-live-test-video-wrap {
   overflow: hidden;
 }
+.landing .lb-preview-live .l-live-test-video-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
 .landing .lb-preview .l-live-test-video {
   position: absolute;
   inset: 0;
@@ -1866,6 +1875,13 @@
 
 .landing .lb-preview-portrait.lb-preview-live {
   aspect-ratio: auto;
+  width: 100%;
+}
+
+/* ...and in portrait the frame keeps the portrait box's own width, centred */
+.landing .lb-preview-portrait.lb-preview-live .l-live-test-video-wrap {
+  width: min(100%, 400px, calc((100vh - 300px) * 2 / 3));
+  margin-inline: auto;
 }
 
 /* the unsaved-changes banner sits over the frame and is as wide as it, in either shape */
@@ -1880,9 +1896,11 @@
 }
 
 .landing .lb-preview .l-live-test-bar {
+  margin-top: 10px;
   padding: 10px 14px;
-  border-bottom: none;
-  border-top: 1px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
 }
 
 /* the test call's camera / share-screen buttons (the agent's vision / screen_capture tools), beside End call */
@@ -1932,15 +1950,17 @@
 }
 
 .landing .l-live-test-see-error {
-  padding: 0 14px 8px;
+  padding: 6px 14px 0;
   font-size: 12.5px;
   color: var(--danger);
 }
 
 .landing .lb-preview .l-live-test-activity {
+  margin-top: 10px;
   padding: 10px 14px;
-  border-top: 1px solid var(--border);
-  border-bottom: none;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
 }
 
 .landing .lb-preview-note {
