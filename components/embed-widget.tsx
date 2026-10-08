@@ -89,6 +89,12 @@ const TRANSCRIPT_MIN_PX = 220;
 export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, transparent, orientation = "portrait", showBranding = true, origin, previewVideoUrl, previewImageUrl }: Props) {
   const landscape = orientation === "landscape";
   const cardW = landscape ? CARD_W_LANDSCAPE : CARD_W;
+  // Frameless only: her outline's right edge in the idle still, to stand her exactly where the closed bubble did.
+  const silhouette = useStillSilhouette(transparent ? previewImageUrl : null);
+  // The box follows what is being drawn: the idle still (landscape) stands exactly where the closed bubble had her, in either
+  // orientation; a portrait render, once it arrives, gets the portrait box -- the two line up (framelessCanvasFor), so nothing moves.
+  const [drawingPortrait, setDrawingPortrait] = useState(false);
+  const framelessCanvas = framelessCanvasFor(landscape || !drawingPortrait, silhouette);
   const [status, setStatus] = useState<Status>("checking");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>(greetingLabel);
@@ -529,7 +535,8 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             audioTrack={audioTrack}
             speakerMuted={speakerMuted}
             idleImageSrc={previewImageUrl ?? null}
-            style={landscape ? framelessCanvasStyle : framelessCanvasPortraitStyle}
+            style={framelessCanvas}
+            onSourceSize={(w, h) => setDrawingPortrait(h > w)}
           />
         </div>
 
@@ -970,51 +977,105 @@ const framelessStageStyle: React.CSSProperties = {
   pointerEvents: "none",
 };
 
-const framelessCanvasStyle: React.CSSProperties = {
-  // Two thirds of the shell's height, which is what 768 of the old portrait render's 1152 rows come to: she stays exactly the size she
-  // was on the host page (the frame is sized for it), and only what is cut off changes -- the picture now ends at the chest, with the
-  // shoulders whole, instead of running on down to the waist with the shoulders cut off at the sides.
-  height: "66.667%",
-  // Pinned, not auto: the canvas's own backing buffer is whatever the
-  // current source is -- the idle still or Anam's live render, both landscape
-  // (1152x768) now -- and at width:auto the CSS box followed whichever shape
-  // was being drawn, so a source of another shape made the whole box change
-  // width and she visibly jumped sideways. aspectRatio fixes the box to the
-  // live render's own shape regardless of which source is actually drawn;
-  // objectFit:cover then fills that fixed box from either source without
-  // distorting it.
-  aspectRatio: "1152 / 768",
-  objectFit: "cover",
-  display: "block",
-  // The picture is 3:2 but she fills only its middle two thirds (about 17% of transparent green each side). Her right edge belongs on
-  // the frame's edge, so the right margin hangs outside the shell (which clips it) and the left one lies under the chat column.
-  transform: "translateX(16.2%)",
-  // What makes her stand on the page rather than sit on top of it.
-  filter: "drop-shadow(0 24px 34px rgba(0,0,0,0.34))",
-};
+// Frameless: she is drawn at exactly the size and in exactly the place the closed bubble shows her (public/widget.js), so opening the
+// widget, the idle picture and the live call are one and the same figure. The bubble draws the keyed still as if the whole picture
+// were CLOSED_FRAMELESS_H tall, cropped to her outline, her rightmost pixel on the page's edge and the picture's bottom on the page's
+// bottom. FRAMELESS_FIGURE_H must equal widget.js's CLOSED_FRAMELESS_H.
+const FRAMELESS_FIGURE_H = 280;
+// How Anam's portrait render (768x1152) holds the 1152x768 still, at the same scale: its middle 768 columns, with 128 rows added
+// above her (a third of the extra height) and the rest below. Measured on a live frame 2026-10-08 (194 and 127, within 2 px of this
+// rule): results/landing-redesign/live-local/measure_frame_mapping.py. The landscape render is the still itself.
+const PORTRAIT_CROP_LEFT = 192;
+const PORTRAIT_PAD_TOP = 128;
 
-// Display mode "portrait": the 768x1152 render in a 2:3 box at the shell's full height (her width, 66.667vh, is the same as
-// the landscape figure's, so the chat column below fits either). Pinned to that shape for the reason given above: the idle
-// still is landscape, and objectFit:cover crops it to the box instead of letting the box jump when the call connects.
-const framelessCanvasPortraitStyle: React.CSSProperties = {
-  height: "100%",
-  aspectRatio: "768 / 1152",
-  objectFit: "cover",
-  display: "block",
-  filter: "drop-shadow(0 24px 34px rgba(0,0,0,0.34))",
-};
+type Silhouette = { w: number; h: number; maxX: number };
+
+/** Her outline's right edge in the idle still, found exactly as widget.js's keyGreenScreenStill finds it (same green rule, a pixel
+ * counts once it keeps more than 32/255 of its opacity) -- the column the bubble puts on the page's edge. */
+function silhouetteOf(img: HTMLImageElement): Silhouette | null {
+  const MIN_GREEN = 90, GREEN_BIAS = 1.15, SOFTNESS = 28;
+  const keyRamp = Math.max(8, SOFTNESS * 0.55);
+  try {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    if (!ctx || !w || !h) return null;
+    ctx.drawImage(img, 0, 0);
+    const px = ctx.getImageData(0, 0, w, h).data;
+    let maxX = -1;
+    for (let i = 0; i < px.length; i += 4) {
+      const r = px[i], g = px[i + 1], b = px[i + 2];
+      const maxC = Math.max(r, g, b), minC = Math.min(r, g, b);
+      const sat = maxC === 0 ? 0 : (maxC - minC) / maxC;
+      const dom = g - Math.max(r, b);
+      let alpha = px[i + 3];
+      if (g === maxC && g > MIN_GREEN && g > r * GREEN_BIAS && g > b * GREEN_BIAS && sat > 0.08 && dom > 2) {
+        alpha = Math.round(alpha * (1 - Math.min(1, Math.max(0, (dom - 2) / keyRamp + (sat - 0.08) * 1.8))));
+      }
+      if (alpha > 32) {
+        const x = (i / 4) % w;
+        if (x > maxX) maxX = x;
+      }
+    }
+    return maxX < 0 ? null : { w, h, maxX };
+  } catch {
+    return null; // an unreadable picture: the default placement below is right for the stock faces
+  }
+}
+
+function useStillSilhouette(src: string | null | undefined): Silhouette | null {
+  const [sil, setSil] = useState<Silhouette | null>(null);
+  useEffect(() => {
+    if (!src) return;
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      if (!cancelled) setSil(silhouetteOf(img));
+    };
+    img.src = src;
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+  return sil;
+}
+
+/** The canvas box for the frameless figure. Pinned (not auto): the canvas's backing buffer is whatever is being drawn -- the idle still
+ * or the live render -- and a box that followed it would jump when the call connects; objectFit:cover fills the pinned box from either.
+ * Its right edge sits on the frame's edge (the stage is right-aligned) and the translate moves it so her rightmost pixel lands there;
+ * whatever hangs outside the shell (the empty margin, the portrait render's extra torso below the frame) is clipped. */
+function framelessCanvasFor(landscape: boolean, sil: Silhouette | null): React.CSSProperties {
+  const w = sil?.w ?? 1152, h = sil?.h ?? 768;
+  const maxX = sil?.maxX ?? Math.round(w * 0.838); // the stock faces' right shoulder, until the picture has been read
+  const s = FRAMELESS_FIGURE_H / h; // screen px per still px: the bubble's scale
+  const base: React.CSSProperties = { objectFit: "cover", display: "block", filter: "drop-shadow(0 24px 34px rgba(0,0,0,0.34))" };
+  if (landscape) {
+    return { ...base, height: FRAMELESS_FIGURE_H, aspectRatio: `${w} / ${h}`, transform: `translateX(${((w - 1 - maxX) * s).toFixed(2)}px)` };
+  }
+  const lastColumn = PORTRAIT_CROP_LEFT + 768; // the first still column past the portrait render's right edge
+  return {
+    ...base,
+    height: Math.round(1152 * s * 100) / 100,
+    aspectRatio: "768 / 1152",
+    transform: `translate(${((lastColumn - 1 - maxX) * s).toFixed(2)}px, ${((1152 - PORTRAIT_PAD_TOP - h) * s).toFixed(2)}px)`,
+  };
+}
 
 const framelessLeftStyle: React.CSSProperties = {
   position: "absolute",
   left: 0,
   bottom: 0,
   // Whatever the avatar leaves free, not a fixed share. She herself (not her
-  // picture's transparent margins, which the chat may lie over) is as wide as
-  // her picture is tall, 66.667vh (see framelessCanvasStyle) -- a flat 62% ran
-  // well past the free space on a 760x620 frame and put the chat on top of her. Still capped at 62% for a
-  // wide, short frame, and floored so a very narrow one keeps a usable column
-  // even though it can no longer avoid her entirely.
-  width: "min(62%, max(200px, calc(100% - 66.667vh - 8px)))",
+  // picture's transparent margins, which the chat may lie over) is about
+  // 281 px wide at the bubble's size (see framelessCanvasFor), so 290 px are
+  // kept clear -- a flat 62% ran well past the free space on a 760x620 frame
+  // and put the chat on top of her. Still capped at 62% for a wide, short
+  // frame, and floored so a very narrow one keeps a usable column even though
+  // it can no longer avoid her entirely.
+  width: "min(62%, max(200px, calc(100% - 290px)))",
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",

@@ -47,6 +47,9 @@ type Props = {
   /** Called once, when the first keyed picture (the still or a live frame) is on the canvas, so a page can fade the face in
    * instead of showing an empty box. */
   onFirstDraw?: () => void;
+  /** Called whenever the picture being drawn changes size -- the idle still, then the live render (which may be another shape) -- so
+   * a page can lay each one out where it belongs. */
+  onSourceSize?: (width: number, height: number) => void;
 };
 
 // Anam's defaults. Named rather than inlined because tuning these is the
@@ -125,9 +128,11 @@ function compile(gl: WebGLRenderingContext, type: number, source: string) {
   return shader;
 }
 
-export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleImageSrc, className, style, onFirstDraw }: Props) {
+export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleImageSrc, className, style, onFirstDraw, onSourceSize }: Props) {
   const onFirstDrawRef = useRef(onFirstDraw);
   onFirstDrawRef.current = onFirstDraw;
+  const onSourceSizeRef = useRef(onSourceSize);
+  onSourceSizeRef.current = onSourceSize;
   const drawnOnceRef = useRef(false);
   // The still only needs drawing when it arrives, and once more when a live video ends; redrawing an unchanged picture sixty times a
   // second would keep a visitor's phone busy for nothing. A live frame is always drawn.
@@ -264,6 +269,7 @@ export function GreenScreenCanvas({ videoTrack, audioTrack, speakerMuted, idleIm
         canvas.width = w;
         canvas.height = h;
         gl.viewport(0, 0, w, h);
+        onSourceSizeRef.current?.(w, h);
       }
 
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
