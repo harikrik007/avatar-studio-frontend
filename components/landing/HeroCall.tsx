@@ -19,6 +19,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RemoteTrack } from "livekit-client";
 import type { AvatarSession } from "@/lib/avatar-session";
 import { GreenScreenCanvas } from "@/components/green-screen-canvas";
@@ -67,6 +68,11 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
   const [dockReady, setDockReady] = useState(false);
   const [scrolledPast, setScrolledPast] = useState(false);
   const [dockHidden, setDockHidden] = useState(false);
+  // The dock is drawn at the top of the page (the .landing root), not inside the hero: the hero is its own stacking layer (isolation,
+  // for its glow), and a fixed box inside it went under every later section that has a position (the step pictures, the install
+  // illustration) whatever its z-index.
+  const callRef = useRef<HTMLDivElement>(null);
+  const [dockHost, setDockHost] = useState<Element | null>(null);
 
   const persona = personas.find((p) => p.key === selectedKey) ?? personas[0];
   const sessionRef = useRef<AvatarSession | null>(null);
@@ -163,6 +169,10 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setDockHost(callRef.current?.closest(".landing") ?? null);
   }, []);
 
   // The dock appears once the hero avatar has scrolled out of view, and goes away when it comes back.
@@ -434,7 +444,7 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
     ) : null;
 
   return (
-    <div className="lh-call" id="lh-call" data-status={status}>
+    <div className="lh-call" id="lh-call" data-status={status} ref={callRef}>
       {personas.length > 1 ? (
         <div className="lh-tabs" role="tablist" aria-label="Choose who to talk to">
           {personas.map((p) => (
@@ -482,26 +492,29 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
         Your browser will ask to use your microphone. The demo lasts up to three minutes.
       </p>
 
-      {showDock ? (
-        <div className={`lh-dock lh-dock-on${speaking ? " lh-stage-speaking" : ""}${dockReady || boxed ? " lh-face-ready" : ""}${boxed ? " lh-dock-boxed" : ""}`} data-status={status}>
-          <div className="lh-dock-glow" aria-hidden="true" />
-          <Face persona={persona} videoTrack={live ? videoTrack : null} audioTrack={audioTrack} onReady={() => setDockReady(true)} />
-          {live ? (
-            <div className={`lh-dock-timer${warning ? " lh-timer-warn" : ""}`} aria-live="off">
-              {warning ? `Ending in ${clock(remaining)}` : `${clock(remaining)}`}
-            </div>
-          ) : null}
-          {soundButton}
-          <div className="lh-dock-ui">{controls("dock")}</div>
-          {!active && status !== "ended" ? (
-            <button type="button" className="lh-dock-x" aria-label={`Hide ${persona.name}`} onClick={hideDock}>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                <path d="M2 2l8 8M10 2l-8 8" />
-              </svg>
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      {showDock && dockHost
+        ? createPortal(
+            <div className={`lh-dock lh-dock-on${speaking ? " lh-stage-speaking" : ""}${dockReady || boxed ? " lh-face-ready" : ""}${boxed ? " lh-dock-boxed" : ""}`} data-status={status}>
+              <div className="lh-dock-glow" aria-hidden="true" />
+              <Face persona={persona} videoTrack={live ? videoTrack : null} audioTrack={audioTrack} onReady={() => setDockReady(true)} />
+              {live ? (
+                <div className={`lh-dock-timer${warning ? " lh-timer-warn" : ""}`} aria-live="off">
+                  {warning ? `Ending in ${clock(remaining)}` : `${clock(remaining)}`}
+                </div>
+              ) : null}
+              {soundButton}
+              <div className="lh-dock-ui">{controls("dock")}</div>
+              {!active && status !== "ended" ? (
+                <button type="button" className="lh-dock-x" aria-label={`Hide ${persona.name}`} onClick={hideDock}>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+                    <path d="M2 2l8 8M10 2l-8 8" />
+                  </svg>
+                </button>
+              ) : null}
+            </div>,
+            dockHost,
+          )
+        : null}
     </div>
   );
 }

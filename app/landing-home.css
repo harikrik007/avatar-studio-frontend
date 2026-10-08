@@ -345,16 +345,19 @@
 .landing .lh-rest .l-btn { border-radius: 999px; padding: 13px 24px; font-weight: 600; margin-top: 6px; }
 .landing .lh-rest-dot { width: 12px; height: 12px; border-radius: 50%; background: #5b6b73; }
 
-/* the dock: the same avatar, small, in the bottom-right corner while the hero is scrolled out of view */
+/* the dock: the same avatar, small, in the bottom-right corner while the hero is scrolled out of view. Above everything on the page,
+   the sticky header (40) included -- HeroCall puts it at the page's top level so this z-index counts -- except the phone menu while it
+   is open (below). */
 .landing .lh-dock {
   position: fixed;
   right: 14px;
   bottom: 12px;
-  z-index: 36;
+  z-index: 50;
   width: 190px;
   height: 260px;
   animation: lh-dock-in 0.35s ease both;
 }
+.landing:has(.lh-nav-open) .lh-dock { z-index: 30; }
 @keyframes lh-dock-in { from { opacity: 0; transform: translateY(18px) scale(0.96); } to { opacity: 1; transform: none; } }
 .landing .lh-dock-glow { position: absolute; left: 50%; top: 45%; width: 340px; aspect-ratio: 1; transform: translate(-50%, -50%); background: radial-gradient(closest-side, rgba(0, 195, 255, 0.28), rgba(0, 195, 255, 0.07) 55%, transparent 74%); pointer-events: none; transition: filter 0.4s ease; }
 .landing .lh-dock.lh-stage-speaking .lh-dock-glow { filter: brightness(1.4); }
