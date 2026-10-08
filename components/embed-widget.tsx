@@ -981,7 +981,8 @@ const framelessStageStyle: React.CSSProperties = {
 // widget, the idle picture and the live call are one and the same figure. The bubble draws the keyed still as if the whole picture
 // were CLOSED_FRAMELESS_H tall, cropped to her outline, her rightmost pixel on the page's edge and the picture's bottom on the page's
 // bottom. FRAMELESS_FIGURE_H must equal widget.js's CLOSED_FRAMELESS_H.
-const FRAMELESS_FIGURE_H = 280;
+// Two thirds of the 350 px frame: her size while connected, which Hari chose for both states (2026-10-08).
+const FRAMELESS_FIGURE_H = (350 * 2) / 3;
 // How Anam's portrait render (768x1152) holds the 1152x768 still, at the same scale: its middle 768 columns, with 128 rows added
 // above her (a third of the extra height) and the rest below. Measured on a live frame 2026-10-08 (194 and 127, within 2 px of this
 // rule): results/landing-redesign/live-local/measure_frame_mapping.py. The landscape render is the still itself.
@@ -1070,12 +1071,12 @@ const framelessLeftStyle: React.CSSProperties = {
   bottom: 0,
   // Whatever the avatar leaves free, not a fixed share. She herself (not her
   // picture's transparent margins, which the chat may lie over) is about
-  // 281 px wide at the bubble's size (see framelessCanvasFor), so 290 px are
+  // 234 px wide at the bubble's size (see framelessCanvasFor), so 242 px are
   // kept clear -- a flat 62% ran well past the free space on a 760x620 frame
   // and put the chat on top of her. Still capped at 62% for a wide, short
   // frame, and floored so a very narrow one keeps a usable column even though
   // it can no longer avoid her entirely.
-  width: "min(62%, max(200px, calc(100% - 290px)))",
+  width: "min(62%, max(200px, calc(100% - 242px)))",
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",

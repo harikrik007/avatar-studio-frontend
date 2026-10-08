@@ -130,8 +130,9 @@
   // page, roughly 40% of a typical viewport's height, not an icon-sized
   // hint of one.
   // The open frameless widget draws her at this same size, in this same place (FRAMELESS_FIGURE_H in components/embed-widget.tsx
-  // must equal it), so clicking the bubble does not make her jump.
-  var CLOSED_FRAMELESS_H = 280;
+  // must equal it), so clicking the bubble does not make her jump. Two thirds of the open frame's height (FRAMELESS_H, 350): the
+  // size she has while connected, which is the one Hari chose (2026-10-08; it was 280, which made the closed bubble the bigger one).
+  var CLOSED_FRAMELESS_H = 350 * 2 / 3;
   // The keyed cutout is cropped to her silhouette (see keyGreenScreenStill),
   // so it is shown at this fraction of CLOSED_FRAMELESS_H to keep her the
   // same size she was inside the full square still.
@@ -309,9 +310,8 @@
   // Half the height it launched at (620): the avatar fills the frame's
   // height, so this is what sets her size on the host page. Width is her
   // 2:3 box (~207px) plus the chat column beside her at its old width.
-  // 610 wide since 2026-10-08: the open widget now draws her at the closed bubble's size (CLOSED_FRAMELESS_H below), which is
-  // ~281 px wide instead of 233; the extra 50 keep the chat column beside her as wide as it was.
-  var FRAMELESS_W = 610;
+  // She is ~234 px wide at CLOSED_FRAMELESS_H (the open widget draws her at that same size); the rest is the chat column.
+  var FRAMELESS_W = 560;
   var FRAMELESS_H = 350;
 
   function ensureFrame() {
