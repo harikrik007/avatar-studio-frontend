@@ -621,15 +621,18 @@ export function EmbedTab({ f, onGoLive }: { f: AgentForm; onGoLive: () => void }
   if (!agent) return null;
   if (!embed) {
     return (
-      <SectionCard n={1} title="Embed widget">
-        <p className="lb-help" style={{ marginTop: 0 }}>
-          The chat widget and its install snippet are created the first time the agent goes live.
-        </p>
-        <button type="button" className="l-btn l-btn-primary lb-btn-sm" disabled={f.busy} onClick={onGoLive}>
-          Go live
-        </button>
-        {f.statusError ? <p className="lb-error">{f.statusError}</p> : null}
-      </SectionCard>
+      <>
+        <SectionCard n={1} title="Embed widget">
+          <p className="lb-help" style={{ marginTop: 0 }}>
+            The chat widget and its install snippet are created the first time the agent goes live.
+          </p>
+          <button type="button" className="l-btn l-btn-primary lb-btn-sm" disabled={f.busy} onClick={onGoLive}>
+            Go live
+          </button>
+          {f.statusError ? <p className="lb-error">{f.statusError}</p> : null}
+        </SectionCard>
+        <BrandingCard f={f} n={2} />
+      </>
     );
   }
 
@@ -710,8 +713,39 @@ export function EmbedTab({ f, onGoLive }: { f: AgentForm; onGoLive: () => void }
           pricing/plans/etc. text is whatever this agent&apos;s own instructions say.
         </p>
       </SectionCard>
+      <BrandingCard f={f} n={3} />
       <ClientToolsSnippet tools={f.form.tools} />
     </>
+  );
+}
+
+/** "Powered by Immilearn" at the bottom of the widget: on or off, saved with the agent (Save changes), so it can be set before the
+ * agent is ever live. */
+function BrandingCard({ f, n }: { f: AgentForm; n: number }) {
+  const on = f.form.showBranding;
+  return (
+    <SectionCard
+      n={n}
+      title="Branding"
+      footer={
+        <div className="lb-toggle-row">
+          <span className="lb-toggle-text">
+            <span className="lb-toggle-label">Show &ldquo;Powered by Immilearn&rdquo;</span>
+            <span className="lb-help" style={{ margin: 0 }}>
+              A small line at the bottom of the widget on your site, linking to immilearn.com. Saved with Save changes.
+            </span>
+          </span>
+          <Switch checked={on} onChange={(v) => f.update("showBranding", v)} label="Show Powered by Immilearn" />
+        </div>
+      }
+    >
+      <div className={`lb-brand-preview${on ? "" : " lb-brand-preview-off"}`} aria-hidden="true">
+        Powered by <strong>Immilearn</strong>
+      </div>
+      <p className="lb-help" style={{ margin: "8px 0 0" }}>
+        {on ? "Visitors see this under the call buttons." : "Hidden: the widget shows no Immilearn line."}
+      </p>
+    </SectionCard>
   );
 }
 
@@ -743,7 +777,7 @@ function ClientToolsSnippet({ tools }: { tools: Tool[] }) {
   }
   return (
     <SectionCard
-      n={3}
+      n={4}
       title="Client tool handlers"
       footer={
         <button type="button" className="l-btn l-btn-ghost lb-btn-sm" onClick={copy}>

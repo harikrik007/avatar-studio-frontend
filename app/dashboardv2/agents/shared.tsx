@@ -76,6 +76,8 @@ export type Agent = {
   transparent?: boolean;
   // The shape the avatar is shown in: in the embedded widget and in the builder's preview. Older agents may not carry it (portrait).
   orientation?: Orientation;
+  // "Powered by Immilearn" at the bottom of the embedded widget; on unless turned off (older agents may not carry it: on).
+  show_branding?: boolean;
   created_at: string;
   documents: AgentDocument[];
   // Set once the agent has been made live at least once -- see the

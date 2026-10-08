@@ -15,6 +15,7 @@ type EmbedConfig = {
   agent_name: string | null;
   transparent?: boolean;
   orientation?: string;
+  show_branding?: boolean;
 };
 
 /**
@@ -90,6 +91,7 @@ export default async function EmbedPage({ params }: { params: Promise<{ key: str
       agentName={config.agent_name ?? undefined}
       transparent={config.transparent ?? false}
       orientation={config.orientation === "landscape" ? "landscape" : "portrait"}
+      showBranding={config.show_branding !== false}
     />
     </>
   );

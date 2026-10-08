@@ -554,6 +554,29 @@
   padding: 7px;
 }
 
+/* Embed tab, Branding: a preview of the line the widget shows, struck through and faded when it is switched off. */
+.landing .lb-brand-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(18, 18, 20, 0.72);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+}
+
+.landing .lb-brand-preview strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.landing .lb-brand-preview-off {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+
 /* Display mode: portrait or landscape. Two cards like the avatar cards above them, each with the shape it stands for. */
 .landing .lb-orient {
   display: grid;

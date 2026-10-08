@@ -38,6 +38,9 @@ type Props = {
   /** The shape the agent's owner chose (the builder's Display mode): the portrait card / figure, or the landscape one. Also
    * decides which render the session asks for, so the picture fills the shape it is shown in. */
   orientation?: "portrait" | "landscape";
+  /** "Powered by Immilearn" at the bottom of the widget, a link to immilearn.com. On unless the owner turned it off (builder,
+   * Embed tab). */
+  showBranding?: boolean;
   origin?: string;
   previewVideoUrl?: string | null;
   previewImageUrl?: string | null;
@@ -83,7 +86,7 @@ const TRANSCRIPT_W = 280;
 // Room for the transcript column = the card plus at least this much: 560 px for the portrait card, as it always was.
 const TRANSCRIPT_MIN_PX = 220;
 
-export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, transparent, orientation = "portrait", origin, previewVideoUrl, previewImageUrl }: Props) {
+export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, transparent, orientation = "portrait", showBranding = true, origin, previewVideoUrl, previewImageUrl }: Props) {
   const landscape = orientation === "landscape";
   const cardW = landscape ? CARD_W_LANDSCAPE : CARD_W;
   const [status, setStatus] = useState<Status>("checking");
@@ -730,6 +733,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           )}
 
           {errorMessage ? <p style={framelessErrorStyle}>{errorMessage}</p> : null}
+          {showBranding ? <PoweredBy style={brandFramelessStyle} /> : null}
         </div>
       </div>
     );
@@ -894,11 +898,54 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               </svg>
             </button>
           </div>
+          {showBranding ? <PoweredBy style={brandPanelStyle} /> : null}
         </div>
       </div>
     </div>
   );
 }
+
+// --- "Powered by Immilearn" ---------------------------------------------------
+// One small line at the bottom of the open widget. The tags say where a visit came from in Immilearn's own analytics.
+const BRAND_URL = "https://immilearn.com/?utm_source=avatar-widget&utm_medium=powered-by";
+
+function PoweredBy({ style }: { style: React.CSSProperties }) {
+  return (
+    <a href={BRAND_URL} target="_blank" rel="noopener noreferrer" style={style} aria-label="Powered by Immilearn (opens in a new tab)">
+      Powered by <strong style={{ fontWeight: 600, color: "#ffffff" }}>Immilearn</strong>
+    </a>
+  );
+}
+
+// Under the call buttons, on the card's dark bottom gradient. The scrim ignores the pointer (so the face stays clickable through
+// it); the link takes it back.
+const brandPanelStyle: React.CSSProperties = {
+  pointerEvents: "auto",
+  margin: "-8px 0 10px",
+  fontSize: 11,
+  lineHeight: 1.3,
+  letterSpacing: 0.2,
+  color: "rgba(255,255,255,0.72)",
+  textDecoration: "none",
+};
+
+// Frameless: the customer's page can be any colour, so it sits in the same dark glass as the bubble and the control bar.
+const brandFramelessStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  padding: "4px 10px",
+  borderRadius: 999,
+  background: "rgba(18,18,20,0.72)",
+  backdropFilter: "blur(10px)",
+  border: "1px solid rgba(255,255,255,0.10)",
+  color: "rgba(255,255,255,0.78)",
+  fontSize: 11,
+  lineHeight: 1.3,
+  letterSpacing: 0.2,
+  textDecoration: "none",
+  fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+};
 
 // --- frameless ------------------------------------------------------------
 // Nothing here paints a background: the host page shows through everywhere
