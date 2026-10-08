@@ -1,10 +1,11 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Track, type RemoteTrack } from "livekit-client";
+import { Track, type RemoteTrack, type Room } from "livekit-client";
 import { LiveKitFace } from "@/components/livekit-face";
 import { GreenScreenCanvas } from "@/components/green-screen-canvas";
 import { AvatarSession, type AvatarToolCall, type ClientToolCall } from "@/lib/avatar-session";
+import { CameraIcon, ScreenIcon, VisionPreview, VisionRequestCard, canShareScreen, useVisitorVideo } from "@/components/visitor-video";
 
 type Status =
   | "idle"
@@ -120,6 +121,11 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
   // Frameless only: on a phone the chat column has nowhere to go but over
   // her face, so the visitor can put it away.
   const [chatHidden, setChatHidden] = useState(false);
+  // The visitor's camera / screen, when the agent can see (components/visitor-video.tsx).
+  const [liveRoom, setLiveRoom] = useState<Room | null>(null);
+  const vision = useVisitorVideo(liveRoom);
+  // Frameless: the one see-button's choice of camera or screen, when the agent can see both.
+  const [seeMenu, setSeeMenu] = useState(false);
   const messageSeqRef = useRef(0);
   const logRef = useRef<HTMLDivElement | null>(null);
   const bubbleTextRef = useRef<HTMLDivElement | null>(null);
@@ -299,6 +305,8 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
     setVideoTrack(null);
     setAudioTrack(null);
     setIsSpeaking(false);
+    setLiveRoom(null);
+    setSeeMenu(false);
     // A fresh call should not inherit a typed draft, an open keyboard, or
     // a mute the visitor may not remember setting three conversations ago.
     setControlsExpanded(false);
@@ -436,6 +444,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             else if (track.kind === Track.Kind.Audio) setAudioTrack(track);
           },
           onAudioBlocked: setAudioBlocked,
+          onVisionMessage: (message) => {
+            vision.handleMessage(message);
+          },
           onSessionEnded: (reason) => {
             if (reason === "idle_timeout") void endSession("idle_timeout");
             // the agent hung up (its end_call tool) after saying goodbye
@@ -465,6 +476,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
       // reply bubble too narrow not to scroll.
       if (!transparent) askHost("resize", { width: cardW + TRANSCRIPT_W });
       sessionRef.current = session;
+      setLiveRoom(session.room);
       roomNameRef.current = session.room.name;
       ownsSessionRef.current = true;
       setAudioBlocked(!session.canPlaybackAudio);
@@ -522,6 +534,14 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           ? "All agents are busy"
           : "Start call";
 
+  // Only during a call, and only what the agent said it can see (a phone cannot share its screen).
+  const offerCamera = isConnected && Boolean(vision.sight?.camera);
+  const offerScreen = isConnected && Boolean(vision.sight?.screen) && canShareScreen();
+  // Frameless: the see-button makes the open bar (with the keyboard and speaker) one button longer than the chat column, which ran
+  // it into her figure; a little smaller then, it fits again (7 buttons of 34 px with 6 px gaps: 307 px of the column's 318).
+  const compactBar = (offerCamera || offerScreen) && controlsExpanded;
+  const bb: React.CSSProperties = compactBar ? { ...barButtonStyle, width: 34, height: 34 } : barButtonStyle;
+
   if (transparent) {
     // Three separate surfaces over the host page, the way the reference
     // does it: the avatar keyed and floating, what she is saying in its own
@@ -562,6 +582,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             </div>
           ) : null}
 
+          {isConnected ? <VisionRequestCard v={vision} agentName={agentName} /> : null}
+          {isConnected ? <VisionPreview v={vision} /> : null}
+
           {textMode ? (
             // Replaces the whole bar rather than sharing it with the call
             // controls -- matches Docket's own reference exactly, and a
@@ -601,7 +624,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               </button>
             </div>
           ) : (
-          <div style={controlBarStyle}>
+          <div style={compactBar ? { ...controlBarStyle, gap: 6 } : controlBarStyle}>
             <button
               type="button"
               aria-label={micOn ? "Mute microphone" : "Unmute microphone"}
@@ -609,7 +632,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               disabled={!isConnected}
               onClick={toggleMic}
               style={{
-                ...barButtonStyle,
+                ...bb,
                 background: !isConnected ? "rgba(255,255,255,0.12)"
                   : micOn ? "rgba(255,255,255,0.16)" : "#dc2626",
                 boxShadow: isSpeaking ? "0 0 0 4px rgba(255,255,255,0.14)" : "none",
@@ -622,6 +645,40 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               </svg>
             </button>
 
+            {offerCamera || offerScreen ? (
+              <span style={seeWrapStyle}>
+                <button
+                  type="button"
+                  aria-label={vision.active === "camera" ? "Turn off camera" : vision.active === "screen" ? "Stop sharing your screen"
+                    : offerCamera && offerScreen ? "Show your camera or screen" : offerCamera ? "Turn on camera" : "Share your screen"}
+                  aria-pressed={Boolean(vision.active)}
+                  aria-expanded={offerCamera && offerScreen && !vision.active ? seeMenu : undefined}
+                  title={vision.active ? "Stop showing" : offerCamera && offerScreen ? "Show your camera or screen" : offerCamera ? "Turn on camera" : "Share your screen"}
+                  disabled={vision.busy}
+                  onClick={() => {
+                    if (vision.active) void vision.stop();
+                    else if (offerCamera && offerScreen) setSeeMenu((v) => !v);
+                    else void vision.start(offerCamera ? "camera" : "screen");
+                  }}
+                  style={{ ...bb, background: vision.active ? "#2563eb" : "rgba(255,255,255,0.16)" }}
+                >
+                  {vision.active === "screen" || (!offerCamera && offerScreen) ? <ScreenIcon /> : <CameraIcon />}
+                </button>
+                {seeMenu && !vision.active && offerCamera && offerScreen ? (
+                  <span role="menu" style={seeMenuStyle}>
+                    <button type="button" role="menuitem" style={seeMenuItemStyle}
+                      onClick={() => { setSeeMenu(false); void vision.start("camera"); }}>
+                      <CameraIcon size={16} /> Camera
+                    </button>
+                    <button type="button" role="menuitem" style={seeMenuItemStyle}
+                      onClick={() => { setSeeMenu(false); void vision.start("screen"); }}>
+                      <ScreenIcon size={16} /> Share screen
+                    </button>
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
+
             <button
               type="button"
               aria-label={isConnected ? "End call" : "Start call"}
@@ -629,7 +686,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               disabled={busy || status === "busy"}
               onClick={() => (isConnected ? void endSession("visitor_closed") : void connect())}
               style={{
-                ...barButtonStyle,
+                ...bb,
                 background: isConnected ? "#dc2626" : busy ? "#d97706" : "#16a34a",
                 opacity: busy || status === "busy" ? 0.75 : 1,
               }}
@@ -649,7 +706,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
               aria-pressed={chatHidden}
               title={chatHidden ? "Show chat" : "Hide chat"}
               onClick={() => setChatHidden((v) => !v)}
-              style={barButtonStyle}
+              style={bb}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M4 5h16v11H8.5L4 20V5z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
@@ -665,7 +722,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                 aria-label={controlsExpanded ? "Fewer controls" : "More controls"}
                 aria-expanded={controlsExpanded}
                 onClick={() => setControlsExpanded((v) => !v)}
-                style={barButtonStyle}
+                style={bb}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d={controlsExpanded ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6"}
@@ -684,7 +741,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                   type="button"
                   aria-label="Type a message"
                   onClick={() => setTextMode(true)}
-                  style={barButtonStyle}
+                  style={bb}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <rect x="3" y="6" width="18" height="12" rx="2.5" stroke="#fff" strokeWidth="1.6" />
@@ -699,7 +756,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                   aria-pressed={speakerMuted}
                   onClick={() => setSpeakerMuted((v) => !v)}
                   style={{
-                    ...barButtonStyle,
+                    ...bb,
                     background: speakerMuted ? "#dc2626" : "rgba(255,255,255,0.16)",
                   }}
                 >
@@ -716,7 +773,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
             ) : null}
 
             {audioBlocked ? (
-              <button type="button" aria-label="Enable sound" style={barButtonStyle}
+              <button type="button" aria-label="Enable sound" style={bb}
                 onClick={() => { void sessionRef.current?.startAudio().then((ok) => setAudioBlocked(!ok)); }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M4 9v6h4l5 4V5L8 9H4z" fill="#fff" />
@@ -729,7 +786,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                 visitor having chosen to hang up. The call button is the way
                 out while connected, and close comes back once it ends. */}
             {!isConnected ? (
-              <button type="button" aria-label="Close" style={barButtonStyle}
+              <button type="button" aria-label="Close" style={bb}
                 onClick={() => { void endSession("visitor_closed"); askHost("close"); }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M5 5l14 14M19 5L5 19" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
@@ -740,6 +797,7 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           )}
 
           {errorMessage ? <p style={framelessErrorStyle}>{errorMessage}</p> : null}
+          {vision.error ? <p style={framelessErrorStyle}>{vision.error}</p> : null}
           {showBranding ? <PoweredBy style={brandFramelessStyle} /> : null}
         </div>
       </div>
@@ -816,8 +874,12 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           </div>
         </div>
 
+        {isConnected ? <VisionPreview v={vision} style={panelPreviewStyle} /> : null}
+
         <div style={bottomScrimStyle}>
           {errorMessage ? <p style={errorStyle}>{errorMessage}</p> : null}
+          {vision.error ? <p style={errorStyle}>{vision.error}</p> : null}
+          {isConnected ? <VisionRequestCard v={vision} agentName={agentName} style={{ margin: "0 12px" }} /> : null}
 
           {/* The conversation, for when there is no room for the column
               beside the card (a phone). Without either, a visitor who cannot
@@ -880,6 +942,33 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
                 </svg>
               )}
             </button>
+
+            {offerCamera ? (
+              <button
+                type="button"
+                aria-label={vision.active === "camera" ? "Turn off camera" : "Turn on camera"}
+                aria-pressed={vision.active === "camera"}
+                title={vision.active === "camera" ? "Turn off camera" : "Turn on camera"}
+                disabled={vision.busy}
+                onClick={() => vision.toggle("camera")}
+                style={{ ...roundButtonStyle, background: vision.active === "camera" ? "#2563eb" : "rgba(55,65,81,0.85)" }}
+              >
+                <CameraIcon size={20} />
+              </button>
+            ) : null}
+            {offerScreen ? (
+              <button
+                type="button"
+                aria-label={vision.active === "screen" ? "Stop sharing your screen" : "Share your screen"}
+                aria-pressed={vision.active === "screen"}
+                title={vision.active === "screen" ? "Stop sharing your screen" : "Share your screen"}
+                disabled={vision.busy}
+                onClick={() => vision.toggle("screen")}
+                style={{ ...roundButtonStyle, background: vision.active === "screen" ? "#2563eb" : "rgba(55,65,81,0.85)" }}
+              >
+                <ScreenIcon size={20} />
+              </button>
+            ) : null}
 
             {/* Start and end are the same control, the way a phone works:
                 green to call, red to hang up, in one place the visitor is
@@ -1498,3 +1587,41 @@ const enableSoundStyle: React.CSSProperties = {
   pointerEvents: "auto",
 };
 
+
+// --- the visitor's camera / screen (components/visitor-video.tsx) -------------------------------------------------------------------
+// Panel: the preview sits in the top-right corner, under the status row.
+const panelPreviewStyle: React.CSSProperties = { position: "absolute", top: 86, right: 12, zIndex: 2 };
+
+// Frameless: one button in the bar; with both on offer it opens this small menu above it.
+const seeWrapStyle: React.CSSProperties = { position: "relative", display: "inline-flex" };
+
+const seeMenuStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: "calc(100% + 12px)",
+  left: -8,
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  padding: 6,
+  borderRadius: 14,
+  background: "rgba(18,18,20,0.86)",
+  backdropFilter: "blur(10px)",
+  border: "1px solid rgba(255,255,255,0.12)",
+  boxShadow: "0 12px 30px rgba(0,0,0,0.3)",
+  zIndex: 5,
+};
+
+const seeMenuItemStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  whiteSpace: "nowrap",
+  border: "none",
+  background: "transparent",
+  color: "#fff",
+  fontSize: 13,
+  padding: "8px 12px",
+  borderRadius: 10,
+  cursor: "pointer",
+  textAlign: "left",
+};

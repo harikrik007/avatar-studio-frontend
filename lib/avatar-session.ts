@@ -50,6 +50,8 @@ export type AvatarSessionCallbacks = {
   onTrack: (track: RemoteTrack) => void;
   onAudioBlocked: (blocked: boolean) => void;
   onSessionEnded?: (reason: string) => void;
+  // What the agent can see (camera / screen) and its requests to see one: components/visitor-video.tsx.
+  onVisionMessage?: (message: Record<string, unknown>) => void;
   onDisconnected: (reason?: string) => void;
   onError: (message: string) => void;
 };
@@ -174,6 +176,10 @@ export class AvatarSession {
         break;
       case "state":
         this.callbacks.onSpeakingChange(Boolean(message.speaking));
+        break;
+      case "vision":
+      case "vision_request":
+        this.callbacks.onVisionMessage?.(message);
         break;
       case "session_end":
         this.callbacks.onSessionEnded?.(String(message.reason ?? ""));

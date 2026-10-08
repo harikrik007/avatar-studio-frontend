@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Room, RoomEvent, Track } from "livekit-client";
 import type { RemoteTrack, RemoteTrackPublication, RemoteParticipant } from "livekit-client";
 import type { Tool } from "@/lib/tools/model";
+import { CameraIcon, ScreenIcon, VisionPreview, VisionRequestCard, canShareScreen, useVisitorVideo } from "@/components/visitor-video";
 
 export type Avatar = {
   id: string;
@@ -204,6 +205,9 @@ export function LiveTestPanel({
   const [activity, setActivity] = useState<ActivityEntry[]>([]);
   const [micOn, setMicOn] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  // The visitor's camera / screen, when the agent's vision / screen_capture tools are on (components/visitor-video.tsx).
+  const [liveRoom, setLiveRoom] = useState<Room | null>(null);
+  const vision = useVisitorVideo(liveRoom);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const roomRef = useRef<Room | null>(null);
@@ -257,6 +261,7 @@ export function LiveTestPanel({
     intentionalDisconnectRef.current = true;
     roomRef.current?.disconnect();
     roomRef.current = null;
+    setLiveRoom(null);
     const room = roomNameRef.current;
     roomNameRef.current = null;
     if (room) {
@@ -309,6 +314,7 @@ export function LiveTestPanel({
       room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
         try {
           const msg = JSON.parse(new TextDecoder().decode(payload));
+          if (vision.handleMessage(msg, room)) return;
           if (msg.type === "client_tool_call" && msg.awaitResult) {
             // The test drive has no host page to run a client tool in, so it
             // answers for one (PLAN.md decision 3); the call and this answer
@@ -364,6 +370,7 @@ export function LiveTestPanel({
         return;
       }
       if (cancelled) return;
+      setLiveRoom(room);
       // Room joined, but the bot itself may still be booting (RunPod cold
       // start) -- "connected" only fires once its video track
       // actually arrives, above. Mic still enables now, not once
@@ -434,6 +441,10 @@ export function LiveTestPanel({
     <div className="l-live-test">
       <div className="l-avatar-dialog-video l-live-test-video-wrap">
         <video ref={videoRef} autoPlay playsInline className="l-live-test-video" />
+        {state === "connected" ? <VisionPreview v={vision} style={{ position: "absolute", top: 10, right: 10, zIndex: 2 }} /> : null}
+        {state === "connected" ? (
+          <VisionRequestCard v={vision} agentName="Your agent" style={{ position: "absolute", left: 12, bottom: 12, right: 12, zIndex: 3 }} />
+        ) : null}
         <audio ref={audioRef} autoPlay />
         {state !== "connected" ? (
           <div className="l-live-test-overlay">
@@ -457,10 +468,37 @@ export function LiveTestPanel({
                 ? "Not connected" // the reason is in the overlay above; it used to be printed twice
                 : "Connecting…"}
         </span>
-        <button type="button" className={stopClassName} onClick={handleStopClick}>
-          {stopLabel}
-        </button>
+        <span className="l-live-test-actions">
+          {state === "connected" && vision.sight?.camera ? (
+            <button
+              type="button"
+              className={`l-live-test-see${vision.active === "camera" ? " is-on" : ""}`}
+              aria-pressed={vision.active === "camera"}
+              disabled={vision.busy}
+              onClick={() => vision.toggle("camera")}
+            >
+              <CameraIcon size={15} />
+              {vision.active === "camera" ? "Camera off" : "Camera"}
+            </button>
+          ) : null}
+          {state === "connected" && vision.sight?.screen && canShareScreen() ? (
+            <button
+              type="button"
+              className={`l-live-test-see${vision.active === "screen" ? " is-on" : ""}`}
+              aria-pressed={vision.active === "screen"}
+              disabled={vision.busy}
+              onClick={() => vision.toggle("screen")}
+            >
+              <ScreenIcon size={15} />
+              {vision.active === "screen" ? "Stop sharing" : "Share screen"}
+            </button>
+          ) : null}
+          <button type="button" className={stopClassName} onClick={handleStopClick}>
+            {stopLabel}
+          </button>
+        </span>
       </div>
+      {vision.error ? <div className="l-live-test-see-error">{vision.error}</div> : null}
       {activity.length > 0 ? (
         <div className="l-live-test-activity">
           {activity.map((e) =>

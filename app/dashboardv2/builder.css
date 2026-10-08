@@ -1885,6 +1885,58 @@
   border-top: 1px solid var(--border);
 }
 
+/* the test call's camera / share-screen buttons (the agent's vision / screen_capture tools), beside End call */
+.landing .l-live-test-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* with those buttons the bar can outgrow a narrow (portrait) preview: the buttons then take a line of their own under the status,
+   instead of squeezing it to a word per line and pushing End call off the edge */
+.landing .lb-preview .l-live-test-bar {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.landing .lb-preview .l-live-test-status {
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+
+.landing .l-live-test-see {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #1f2937;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.landing .l-live-test-see.is-on {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.landing .l-live-test-see:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.landing .l-live-test-see-error {
+  padding: 0 14px 8px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
 .landing .lb-preview .l-live-test-activity {
   padding: 10px 14px;
   border-top: 1px solid var(--border);

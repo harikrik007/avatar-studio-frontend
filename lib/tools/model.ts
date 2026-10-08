@@ -84,6 +84,11 @@ const SCHEMA_TYPES = new Set(["string", "number", "integer", "boolean", "array",
 // Built-in tools: toggled, never edited. Their names are reserved.
 export const SYSTEM_TOOLS: Record<string, string> = {
   end_call: "Allows the user to end the call. The agent says a short goodbye, then hangs up.",
+  // The model is told what these do in the backend's own copy (studio_tools/model.py); these lines are for the owner.
+  screen_capture:
+    "Lets the agent see the user's screen. The user gets a Share screen button in the call, and the agent can ask them to share. Computers only: phone browsers can't share a screen.",
+  vision:
+    "Lets the agent see the user's camera. The user gets a camera button in the call, and the agent can ask them to turn it on.",
 };
 
 export const NAME_RE = /^[a-zA-Z0-9_.-]{1,64}$/;

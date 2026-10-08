@@ -344,8 +344,11 @@
     // if the host page itself is HTTPS and its own Permissions-Policy (if
     // any) does not already block "microphone" from being delegated
     // further; that is a host-page configuration issue this script cannot
-    // fix, only document (see the install instructions).
-    frame.setAttribute("allow", "microphone");
+    // fix, only document (see the install instructions). Camera and screen
+    // capture likewise, for an agent that can see (its vision /
+    // screen_capture tools); the browser still asks the visitor first, and
+    // only once they press the button.
+    frame.setAttribute("allow", "microphone; camera; display-capture");
     frame.style.cssText = "width:100%;height:100%;border:0;display:block;" +
       (frameless ? "background:transparent;" : "");
     // Chrome paints an opaque canvas behind an iframe unless the embedded
