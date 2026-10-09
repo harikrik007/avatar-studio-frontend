@@ -803,16 +803,10 @@ function ClientToolsSnippet({ tools }: { tools: Tool[] }) {
 
 export function AdvancedTab({
   f,
-  canCascade,
-  testing,
-  onTestCascade,
   onToggleLive,
   onDelete,
 }: {
   f: AgentForm;
-  canCascade: boolean;
-  testing: boolean;
-  onTestCascade: () => void;
   onToggleLive: () => void;
   onDelete: () => void;
 }) {
@@ -820,22 +814,6 @@ export function AdvancedTab({
   let n = 0;
   return (
     <>
-      {canCascade ? (
-        <SectionCard
-          n={++n}
-          title="Test cascade (beta)"
-          footer={
-            <button type="button" className="l-btn l-btn-ghost lb-btn-sm" disabled={testing || f.busy} onClick={onTestCascade}>
-              Test cascade
-            </button>
-          }
-        >
-          <p className="lb-help" style={{ margin: 0 }}>
-            Runs this agent on speech-to-text → Gemini 3 Flash → Gemini TTS instead of Gemini Live, in the
-            preview on the right. Test only — your live widget is unchanged.
-          </p>
-        </SectionCard>
-      ) : null}
       <SectionCard
         n={++n}
         title="Availability"

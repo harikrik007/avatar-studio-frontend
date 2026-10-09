@@ -41,7 +41,7 @@ export default function AgentBuilder({ agentId }: { agentId?: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const nameRef = useRef<HTMLInputElement>(null);
-  const [testMode, setTestMode] = useState<null | "live" | "cascade">(null);
+  const [testMode, setTestMode] = useState<null | "live">(null);
   const [toast, setToast] = useState<string | null>(null);
   const [nameHint, setNameHint] = useState(false);
 
@@ -147,7 +147,6 @@ export default function AgentBuilder({ agentId }: { agentId?: string }) {
   const status = f.agent?.status;
   const statusText = f.isCreate ? "Draft" : status === "live" ? "Live" : status === "provisioning" ? "Starting…" : "Offline";
   const canTest = !f.isCreate && Boolean(f.agent);
-  const canCascade = canTest && f.selectedAvatar?.provider === "anam";
   const tabIndex = CORE_TABS.findIndex((t) => t.id === tab);
 
   const stepDone: Record<TabId, boolean> = {
@@ -251,9 +250,6 @@ export default function AgentBuilder({ agentId }: { agentId?: string }) {
             {tab === "advanced" && !f.isCreate ? (
               <AdvancedTab
                 f={f}
-                canCascade={canCascade}
-                testing={testMode !== null}
-                onTestCascade={() => setTestMode("cascade")}
                 onToggleLive={() => void handleToggleLive()}
                 onDelete={() => void handleDelete()}
               />
@@ -374,8 +370,8 @@ function PreviewPanel({
   onJump,
 }: {
   f: AgentForm;
-  testMode: null | "live" | "cascade";
-  setTestMode: (m: null | "live" | "cascade") => void;
+  testMode: null | "live";
+  setTestMode: (m: null | "live") => void;
   canTest: boolean;
   statusText: string;
   onJump: (t: TabId) => void;
@@ -418,7 +414,6 @@ function PreviewPanel({
             <LiveTestPanel
               key={testMode}
               agentId={f.agent.id}
-              pipeline={testMode === "cascade" ? "cascade" : undefined}
               // the render of the shape the box has, so the call fills it the way the idle picture does
               frame={portrait ? "portrait" : "wide"}
               stopLabel="End call"
@@ -455,11 +450,9 @@ function PreviewPanel({
           )}
         </div>
         <p className="lb-preview-note">
-          {testMode === "cascade"
-            ? "Cascade test (beta): speech-to-text → Gemini 3 Flash → Gemini TTS."
-            : canTest
-              ? "Start call opens a real, temporary live session — your mic will be requested. It's separate from going live on your site."
-              : "Create the agent to test it here."}
+          {canTest
+            ? "Start call opens a real, temporary live session — your mic will be requested. It's separate from going live on your site."
+            : "Create the agent to test it here."}
         </p>
         <div className="lb-chips">
           <button type="button" className="lb-chip" onClick={() => onJump("avatar")}>

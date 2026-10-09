@@ -14,15 +14,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const { id } = await params;
-  // ?pipeline=cascade: the test-only cascaded voice pipeline (VAD -> speech-
-  // to-text -> LLM -> TTS) instead of Gemini Live; stopped/polled through the
-  // same GET/DELETE below.
-  const search = new URL(request.url).searchParams;
-  const cascade = search.get("pipeline") === "cascade";
   // ?frame=wide | portrait: the render for the preview box's shape. Only these two values are passed on.
-  const requested = search.get("frame");
+  const requested = new URL(request.url).searchParams.get("frame");
   const frame = requested === "wide" || requested === "portrait" ? `?frame=${requested}` : "";
-  const res = await fetch(`${API_URL}/agents/${id}/${cascade ? "cascade-test-session" : "test-session"}${frame}`, {
+  const res = await fetch(`${API_URL}/agents/${id}/test-session${frame}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${API_TOKEN}`,

@@ -183,16 +183,12 @@ export const WARMING_MAX_POLLS = 10; // ~40s; the avatar normally appears in ~2
 export function LiveTestPanel({
   agentId,
   onStopped,
-  pipeline,
   frame,
   stopLabel = "Stop test",
   stopClassName = "l-btn l-btn-ghost",
 }: {
   agentId: string;
   onStopped: () => void;
-  // "cascade": the test-only VAD -> speech-to-text -> LLM -> TTS pipeline
-  // instead of Gemini Live (see the backend's cascade-test-session).
-  pipeline?: "cascade";
   // The render to ask for: "wide" (1152x768) for a landscape box, "portrait" (768x1152) for a portrait one. Without it the
   // agent's saved Display mode decides (the backend's rule); the builder always says, since its box may show an unsaved choice.
   frame?: "wide" | "portrait";
@@ -281,7 +277,6 @@ export function LiveTestPanel({
       if (cancelled) return;
 
       const params = new URLSearchParams();
-      if (pipeline === "cascade") params.set("pipeline", "cascade");
       if (frame) params.set("frame", frame);
       const query = params.size ? `?${params}` : "";
       const res = await fetch(`/api/agents/${agentId}/test-session${query}`, { method: "POST" });
@@ -395,7 +390,7 @@ export function LiveTestPanel({
       pendingRef.current = pendingRef.current.catch(() => {}).then(teardown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentId, pipeline, frame]);
+  }, [agentId, frame]);
 
   // Unhappy-path backstop while "warming": if RunPod's own job status comes
   // back FAILED, surface that instead of leaving the customer staring at
