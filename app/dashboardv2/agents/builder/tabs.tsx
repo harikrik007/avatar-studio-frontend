@@ -801,6 +801,11 @@ function ClientToolsSnippet({ tools }: { tools: Tool[] }) {
 /* ADVANCED (edit mode)                                               */
 /* ------------------------------------------------------------------ */
 
+/** The Voice isolation switch (agents.voice_isolation: the visitor's audio filtered by background voice cancellation) is hidden
+ * for now (Hari, 2026-10-09: "its not working proper"). The backend keeps the setting and the form still sends it back unchanged;
+ * set this to true to show the switch again. */
+const SHOW_VOICE_ISOLATION = false;
+
 export function AdvancedTab({
   f,
   onToggleLive,
@@ -837,6 +842,7 @@ export function AdvancedTab({
         </p>
         {f.statusError ? <p className="lb-error">{f.statusError}</p> : null}
       </SectionCard>
+      {SHOW_VOICE_ISOLATION ? (
       <SectionCard
         n={++n}
         title="Voice isolation"
@@ -858,6 +864,7 @@ export function AdvancedTab({
           room.
         </p>
       </SectionCard>
+      ) : null}
       <SectionCard
         n={++n}
         title="Danger zone"
