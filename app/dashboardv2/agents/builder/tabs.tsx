@@ -14,6 +14,7 @@ import type { AgentForm } from "../useAgentForm";
 import PromptDialog from "./PromptDialog";
 import { AvatarCard, AvatarLibrary } from "./AvatarLibrary";
 import { ExpandIcon } from "./tools/icons";
+import { useFeatures } from "@/lib/features";
 
 /* ------------------------------------------------------------------ */
 /* building blocks                                                    */
@@ -801,9 +802,9 @@ function ClientToolsSnippet({ tools }: { tools: Tool[] }) {
 /* ADVANCED (edit mode)                                               */
 /* ------------------------------------------------------------------ */
 
-/** The Voice isolation switch (agents.voice_isolation: the visitor's audio filtered by background voice cancellation) is hidden
- * for now (Hari, 2026-10-09: "its not working proper"). The backend keeps the setting and the form still sends it back unchanged;
- * set this to true to show the switch again. */
+/** The Voice isolation switch (agents.voice_isolation: the visitor's audio filtered by background voice cancellation) is shown
+ * only to the accounts app/api/features allows (Hari, 2026-10-09: "show the voice isolation switch only for user
+ * iamharihk@gmail.com"); everyone else's form still sends the agent's value back unchanged. True shows it to everyone. */
 const SHOW_VOICE_ISOLATION = false;
 
 export function AdvancedTab({
@@ -816,6 +817,8 @@ export function AdvancedTab({
   onDelete: () => void;
 }) {
   const status = f.agent?.status;
+  const features = useFeatures();
+  const showVoiceIsolation = SHOW_VOICE_ISOLATION || features.voiceIsolation;
   let n = 0;
   return (
     <>
@@ -842,7 +845,7 @@ export function AdvancedTab({
         </p>
         {f.statusError ? <p className="lb-error">{f.statusError}</p> : null}
       </SectionCard>
-      {SHOW_VOICE_ISOLATION ? (
+      {showVoiceIsolation ? (
       <SectionCard
         n={++n}
         title="Voice isolation"
