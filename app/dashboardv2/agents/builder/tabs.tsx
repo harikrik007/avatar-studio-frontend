@@ -839,6 +839,27 @@ export function AdvancedTab({
       </SectionCard>
       <SectionCard
         n={++n}
+        title="Voice isolation"
+        footer={
+          <div className="lb-toggle-row">
+            <span className="lb-toggle-text">
+              <span className="lb-toggle-label">Filter out background voices</span>
+              <span className="lb-help" style={{ margin: 0 }}>
+                Saved with Save changes; applies from the next call.
+              </span>
+            </span>
+            <Switch checked={f.form.voiceIsolation} onChange={(v) => f.update("voiceIsolation", v)} label="Filter out background voices" />
+          </div>
+        }
+      >
+        <p className="lb-help" style={{ margin: 0 }}>
+          Removes background noise and other people&apos;s voices from the visitor&apos;s microphone before your agent hears them, so
+          chatter around a kiosk or a shop counter doesn&apos;t interrupt it. Best for busy places; leave it off for calls from a quiet
+          room.
+        </p>
+      </SectionCard>
+      <SectionCard
+        n={++n}
         title="Danger zone"
         footer={
           <button type="button" className="lb-btn-danger" onClick={onDelete}>

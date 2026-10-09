@@ -107,6 +107,9 @@ export type Agent = {
   orientation?: Orientation;
   // "Powered by Immilearn" at the bottom of the embedded widget; on unless turned off (older agents may not carry it: on).
   show_branding?: boolean;
+  // The visitor's microphone is filtered (background noise and other people's voices) before the agent hears it. Off unless
+  // turned on (older agents may not carry it: off).
+  voice_isolation?: boolean;
   created_at: string;
   documents: AgentDocument[];
   // Set once the agent has been made live at least once -- see the

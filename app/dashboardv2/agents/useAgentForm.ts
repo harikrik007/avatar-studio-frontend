@@ -5,8 +5,8 @@
  * (/agents/:id). Moved out of the old CreateAgentForm and AgentDialog, which
  * each kept their own copy of the same fields and fetch calls. The request
  * payloads are unchanged:
- *   create  POST  /api/agents          {avatar_id, name, opening_intro, system_prompt, voice, transparent, orientation, show_branding, tools}
- *   save    PATCH /api/agents/:id      {avatar_id, transparent, orientation, show_branding, name, opening_intro, system_prompt, voice, tools}
+ *   create  POST  /api/agents          {avatar_id, name, opening_intro, system_prompt, voice, transparent, orientation, show_branding, voice_isolation, tools}
+ *   save    PATCH /api/agents/:id      {avatar_id, transparent, orientation, show_branding, voice_isolation, name, opening_intro, system_prompt, voice, tools}
  *   status  PATCH /api/agents/:id      {status: "live" | "draft"}
  *   delete  DELETE /api/agents/:id
  * Knowledge files upload through /api/agents/:id/documents -- straight away in
@@ -26,6 +26,8 @@ export type AgentFormState = {
   orientation: Orientation;
   // "Powered by Immilearn" at the bottom of the embedded widget.
   showBranding: boolean;
+  // Filter background noise and other people's voices out of the visitor's microphone (kiosks, shops).
+  voiceIsolation: boolean;
   openingIntro: string;
   systemPrompt: string;
   voice: string;
@@ -38,6 +40,7 @@ const EMPTY: AgentFormState = {
   transparent: false,
   orientation: "portrait",
   showBranding: true,
+  voiceIsolation: false,
   openingIntro: "",
   systemPrompt: "",
   voice: DEFAULT_VOICE,
@@ -51,6 +54,7 @@ function fromAgent(agent: Agent): AgentFormState {
     transparent: Boolean(agent.transparent),
     orientation: agent.orientation === "landscape" ? "landscape" : "portrait",
     showBranding: agent.show_branding !== false,
+    voiceIsolation: agent.voice_isolation === true,
     openingIntro: agent.opening_intro,
     systemPrompt: agent.system_prompt,
     voice: agent.voice,
@@ -158,6 +162,7 @@ export function useAgentForm(agentId?: string) {
         transparent: form.transparent,
         orientation: form.orientation,
         show_branding: form.showBranding,
+        voice_isolation: form.voiceIsolation,
         name: form.name,
         opening_intro: form.openingIntro,
         system_prompt: form.systemPrompt,
@@ -217,6 +222,7 @@ export function useAgentForm(agentId?: string) {
         transparent: form.transparent,
         orientation: form.orientation,
         show_branding: form.showBranding,
+        voice_isolation: form.voiceIsolation,
         tools: form.tools,
       }),
     });
