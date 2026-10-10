@@ -79,6 +79,20 @@ export default function AgentBuilder({ agentId }: { agentId?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Opened from a card's Test button on the agents list (?test=1): the test call starts as soon as the agent is here, and
+  // the flag leaves the address so a reload does not start another.
+  const autoTest = useRef(params.get("test") === "1");
+  const agentReady = !f.isCreate && Boolean(f.agent);
+  useEffect(() => {
+    if (!autoTest.current || !agentReady) return;
+    autoTest.current = false;
+    setTestMode("live");
+    const q = new URLSearchParams(params.toString());
+    q.delete("test");
+    router.replace(`?${q.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentReady]);
+
   // leave-page guard
   useEffect(() => {
     if (!f.dirty) return;

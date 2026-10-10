@@ -1,0 +1,433 @@
+/* The agents list (app/dashboardv2/agents/page.tsx): cards, two to a row. Built on landing.css's tokens; nothing here is shared. */
+
+.landing .la-shell {
+  max-width: 1120px;
+  /* The dashboard stacks its children on a phone and sizes each to its content: pinned to the available width. */
+  width: 100%;
+  min-width: 0;
+  /* what a cut-out face stands on */
+  --la-backdrop: radial-gradient(120% 90% at 50% 0%, #1f3a45 0%, #17252b 55%, #141a1d 100%);
+}
+
+.landing .la-defs {
+  position: absolute;
+}
+
+.landing .la-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---- header: title and count on the left, Create agent on the right ------------------------------------------------ */
+.landing .la-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-bottom: 20px;
+}
+
+.landing .la-head .l-dash-header {
+  margin-bottom: 0;
+}
+
+.landing .la-create {
+  gap: 8px;
+  padding: 10px 18px;
+}
+
+/* ---- search and the Live / Draft filter (long lists only) ---------------------------------------------------------- */
+.landing .la-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.landing .la-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 240px;
+  max-width: 360px;
+  color: var(--l-muted);
+}
+
+.landing .la-search svg {
+  position: absolute;
+  left: 11px;
+  pointer-events: none;
+}
+
+.landing .la-search input {
+  width: 100%;
+  font: inherit;
+  font-size: var(--l-fs-body);
+  color: var(--l-fg);
+  background: var(--l-bg-raised);
+  border: 1px solid var(--l-border);
+  border-radius: 8px;
+  padding: 8px 12px 8px 32px;
+}
+
+.landing .la-search input::placeholder {
+  color: var(--l-muted);
+}
+
+.landing .la-seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--l-border);
+  border-radius: 8px;
+  background: var(--l-bg-raised);
+}
+
+.landing .la-seg-btn {
+  font: inherit;
+  font-size: var(--l-fs-helper);
+  color: var(--l-muted);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  cursor: pointer;
+}
+
+.landing .la-seg-btn:hover {
+  color: var(--l-fg);
+}
+
+.landing .la-seg-on {
+  color: var(--l-fg);
+  background: var(--l-bg-raised-hover);
+}
+
+.landing .la-search input:focus-visible,
+.landing .la-seg-btn:focus-visible,
+.landing .la-btn:focus-visible,
+.landing .la-edit:focus-visible,
+.landing .la-new:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 2px;
+}
+
+/* ---- the grid: two cards to a row where there is room for two, one otherwise --------------------------------------- */
+.landing .la-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
+  gap: 16px;
+}
+
+.landing .la-card {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  min-width: 0;
+  padding: 14px;
+  background: var(--l-bg-raised);
+  border: 1px solid var(--l-border);
+  border-radius: 16px;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.landing .la-card:hover,
+.landing .la-card:focus-within {
+  border-color: var(--l-accent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.landing .la-card:hover {
+  transform: translateY(-2px);
+}
+
+.landing .la-card-wait,
+.landing .la-card-wait:hover {
+  transform: none;
+  border-color: var(--l-border);
+  box-shadow: none;
+}
+
+/* ---- the face ------------------------------------------------------------------------------------------------------ */
+.landing .la-face {
+  position: relative;
+  flex: 0 0 132px;
+  aspect-ratio: 4 / 5;
+  align-self: flex-start;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--la-backdrop);
+  border: 1px solid var(--l-border);
+}
+
+/* one pixel larger than its frame all round: the cut-out's trimmed edge would otherwise show as a hairline of backdrop */
+.landing .la-face img,
+.landing .la-face video {
+  position: absolute;
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  object-fit: cover;
+  object-position: 50% 0%;
+}
+
+.landing .la-face img.la-keyed {
+  filter: url(#la-key);
+}
+
+.landing .la-face-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display), sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--l-muted);
+}
+
+.landing .la-status {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 100px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--l-fg);
+  background: rgba(16, 18, 20, 0.74);
+  border: 1px solid rgba(223, 248, 255, 0.14);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.landing .la-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(223, 248, 255, 0.45);
+}
+
+.landing .la-status-live .la-dot {
+  background: #4ade80;
+  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18);
+}
+
+.landing .la-status-provisioning .la-dot {
+  background: #fbbf24;
+}
+
+/* ---- what the agent is ------------------------------------------------------------------------------------------------ */
+.landing .la-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 6px;
+}
+
+.landing .la-name {
+  margin: 2px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landing .la-main-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* the whole card opens the agent; the buttons below sit above this */
+.landing .la-main-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+}
+
+.landing .la-main-link:focus-visible {
+  outline: none;
+}
+
+.landing .la-main-link:focus-visible::after {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 2px;
+}
+
+.landing .la-sub {
+  margin: 0;
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.landing .la-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.landing .la-chips li {
+  font-size: 11.5px;
+  line-height: 1.5;
+  padding: 1px 9px;
+  border-radius: 100px;
+  color: var(--l-muted);
+  border: 1px solid var(--l-border);
+  white-space: nowrap;
+}
+
+.landing .la-usage {
+  margin: auto 0 0;
+  padding-top: 8px;
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+}
+
+.landing .la-usage strong {
+  color: var(--l-fg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.landing .la-usage-wait {
+  display: inline-block;
+  width: 60%;
+  height: 12px;
+  border-radius: 6px;
+  vertical-align: middle;
+}
+
+.landing .la-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* with no usage line (it could not be read), the buttons take the foot of the card themselves */
+.landing .la-chips + .la-actions {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.landing .la-btn {
+  font-size: var(--l-fs-helper);
+  font-weight: 500;
+  color: var(--l-fg);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--l-border);
+  background: var(--l-bg);
+  white-space: nowrap;
+}
+
+.landing .la-btn:hover {
+  border-color: rgba(223, 248, 255, 0.32);
+  background: var(--l-bg-raised-hover);
+}
+
+.landing .la-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 6px 4px;
+  font-size: var(--l-fs-helper);
+  font-weight: 500;
+  color: var(--l-accent);
+  text-decoration: none;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.landing .la-edit svg {
+  transition: transform 0.15s ease;
+}
+
+.landing .la-card:hover .la-edit svg {
+  transform: translateX(2px);
+}
+
+/* ---- the last tile: a new agent ------------------------------------------------------------------------------------- */
+.landing .la-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+  border: 1px dashed rgba(223, 248, 255, 0.24);
+  border-radius: 16px;
+  color: var(--l-muted);
+  font-size: var(--l-fs-body);
+  font-weight: 500;
+  text-decoration: none;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.landing .la-new:hover {
+  color: var(--l-accent);
+  border-color: var(--l-accent);
+  background: rgba(0, 195, 255, 0.04);
+}
+
+.landing .la-no-match {
+  margin-top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .la-card,
+  .landing .la-card:hover,
+  .landing .la-edit svg,
+  .landing .la-card:hover .la-edit svg {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ---- phone ---------------------------------------------------------------------------------------------------------- */
+@media (max-width: 520px) {
+  .landing .la-card {
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .landing .la-face {
+    flex-basis: 96px;
+  }
+
+  /* tighter, so Test, Embed code and Edit share one line beside the smaller face */
+  .landing .la-actions {
+    gap: 6px;
+  }
+
+  .landing .la-btn {
+    padding: 6px 9px;
+  }
+
+  .landing .la-create {
+    width: 100%;
+  }
+}

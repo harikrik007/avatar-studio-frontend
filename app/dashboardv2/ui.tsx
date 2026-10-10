@@ -6,7 +6,7 @@
 // they are meant to diverge. The one real difference is AvatarThumb --
 // Anam faces come with a CDN still, not a rendered preview clip.
 
-function initials(name: string): string {
+export function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
   if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
