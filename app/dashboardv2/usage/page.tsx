@@ -1,44 +1,43 @@
 "use client";
 
 /**
- * How long each call ran, for widget (embedded) calls and for the dashboard's test button, with the day / agent / type breakdown,
- * the filters and a CSV. A customer is billed in minutes (a plan's minutes will come later), so this page speaks minutes and
- * nothing else: no prices, no token counts, no provider names. Every client's usage, tokens and cost live in the separate admin
- * dashboard (avatar-studio-admin), not here, whoever is signed in.
+ * How long each session ran, for widget (embedded) sessions and for the dashboard's test button: the totals, the breakdown as a
+ * graph (by day, agent or type, in sessions or minutes) and the sessions themselves, a page at a time, with a CSV. A customer is
+ * billed in minutes (a plan's minutes will come later), so this page speaks minutes and nothing else: no prices, no token
+ * counts, no provider names. Every client's usage, tokens and cost live in the separate admin dashboard (avatar-studio-admin),
+ * not here, whoever is signed in.
  *
- * Ditto / FlashHead / Wav2Lip calls are listed with their duration like the others.
+ * The time range at the top applies to everything; the Type, Status and Agent filters sit on the sessions table and apply to
+ * it (and its CSV) only. Ditto / FlashHead / Wav2Lip sessions are listed with their length like the others.
  */
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./usage.css";
-import TranscriptDialog from "./TranscriptDialog";
+import RangePicker, { Chevron } from "./RangePicker";
+import SessionsTable from "./SessionsTable";
+import UsageChart, { type Metric, type View } from "./UsageChart";
 import {
   KIND_FILTERS,
-  endReasonLabel,
+  buildBuckets,
+  buildCategories,
+  bucketUnit,
+  daysBetween,
+  formatClock,
   formatCount,
   formatDayRange,
-  formatMinutes,
-  formatSeconds,
-  kindLabel,
+  groupByFor,
   localDay,
-  rangeLastDays,
-  statusBadgeClass,
-  statusLabel,
+  minutesValue,
+  periodRange,
   tzOffsetMinutes,
   usageQuery,
   utcLabel,
-  type GroupBy,
+  type PeriodId,
   type UsageCalls,
   type UsageItem,
   type UsageSummary,
 } from "@/lib/usage";
 
-const RANGES = [
-  { label: "Today", days: 1 },
-  { label: "7 days", days: 7 },
-  { label: "30 days", days: 30 },
-  { label: "90 days", days: 90 },
-];
 const STATUSES = [
   { label: "Any status", value: "" },
   { label: "Completed", value: "completed" },
@@ -46,74 +45,72 @@ const STATUSES = [
   { label: "Lost", value: "lost" },
   { label: "Running", value: "active" },
 ];
-const GROUPS: { value: GroupBy; label: string }[] = [
-  { value: "day", label: "Day" },
-  { value: "agent", label: "Agent" },
-  { value: "kind", label: "Type" },
-];
-const PAGE = 50;
+const TYPES = KIND_FILTERS.map((k) => ({ ...k, label: k.value ? k.label : "All types" }));
 
 type AgentOption = { id: string; name: string };
 
 export default function UsagePage() {
-  // A preset (1 = today, 7, 30, 90 days) or a range picked by hand.
-  const [period, setPeriod] = useState<number | "custom">(30);
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  // A dropdown choice or a range picked by hand.
+  const [period, setPeriod] = useState<PeriodId | "custom">("30d");
+  const [custom, setCustom] = useState({ from: "", to: "" });
+  const [metric, setMetric] = useState<Metric>("calls");
+  const [view, setView] = useState<View>("time");
   const [kind, setKind] = useState("");
   const [status, setStatus] = useState("");
   const [agentId, setAgentId] = useState("");
-  const [groupBy, setGroupBy] = useState<GroupBy>("day");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [summary, setSummary] = useState<UsageSummary | null>(null);
-  const [items, setItems] = useState<UsageItem[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loaded, setLoaded] = useState(false);
+  const [calls, setCalls] = useState<{ items: UsageItem[]; total: number } | null>(null);
+  const [summaryBusy, setSummaryBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [open, setOpen] = useState<string | null>(null);
-  // A slower answer to an older filter must not overwrite a newer one.
-  const seq = useRef(0);
+  // A slower answer to an older choice must not overwrite a newer one.
+  const summarySeq = useRef(0);
+  const callsSeq = useRef(0);
 
-  const todayStr = localDay(new Date());
-  const { from, to } = period === "custom" ? { from: customFrom || todayStr, to: customTo || todayStr } : rangeLastDays(period);
-  // Days are the viewer's own: the backend reads from/to and the Day grouping in this offset.
+  const today = localDay(new Date());
+  const { from, to } = period === "custom" ? { from: custom.from || today, to: custom.to || today } : periodRange(period);
+  // Days are the viewer's own: the backend reads from/to and the Day / Hour grouping in this offset.
   const tz = tzOffsetMinutes();
-  const filters = { from, to, kind, status, agent_id: agentId, tz };
-  const filterKey = JSON.stringify(filters);
-
-  const load = useCallback(async () => {
-    const mine = ++seq.current;
-    setError(null);
-    try {
-      const f = JSON.parse(filterKey) as Record<string, string>;
-      const [s, c] = await Promise.all([
-        fetch(`/api/usage/summary${usageQuery({ ...f, group_by: groupBy })}`),
-        fetch(`/api/usage/calls${usageQuery({ ...f, limit: PAGE, offset: 0 })}`),
-      ]);
-      if (mine !== seq.current) return;
-      if (!s.ok || !c.ok) {
-        const body = await (s.ok ? c : s).json().catch(() => ({}));
-        setError(typeof body.detail === "string" ? body.detail : "Could not load usage.");
-        setLoaded(true);
-        return;
-      }
-      const sj: UsageSummary = await s.json();
-      const cj: UsageCalls = await c.json();
-      if (mine !== seq.current) return;
-      setSummary(sj);
-      setItems(cj.items);
-      setTotal(cj.total);
-      setOpen(null);
-    } catch {
-      if (mine === seq.current) setError("Could not load usage.");
-    }
-    if (mine === seq.current) setLoaded(true);
-  }, [filterKey, groupBy]);
+  const unit = bucketUnit(from, to);
+  const groupBy = view === "time" ? groupByFor(unit) : view;
+  const range = { from, to, tz };
+  const tableFilters = { ...range, kind, status, agent_id: agentId };
+  const summaryKey = JSON.stringify({ ...range, group_by: groupBy });
+  const callsKey = JSON.stringify({ ...tableFilters, limit: pageSize, offset: page * pageSize });
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const mine = ++summarySeq.current;
+    setSummaryBusy(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/usage/summary${usageQuery(JSON.parse(summaryKey))}`);
+        const body = await res.json().catch(() => ({}));
+        if (mine !== summarySeq.current) return;
+        if (!res.ok) setError(typeof body.detail === "string" ? body.detail : "Could not load usage.");
+        else { setSummary(body as UsageSummary); setError(null); }
+      } catch {
+        if (mine === summarySeq.current) setError("Could not load usage.");
+      }
+      if (mine === summarySeq.current) setSummaryBusy(false);
+    })();
+  }, [summaryKey]);
+
+  useEffect(() => {
+    const mine = ++callsSeq.current;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/usage/calls${usageQuery(JSON.parse(callsKey))}`);
+        const body = await res.json().catch(() => ({}));
+        if (mine !== callsSeq.current) return;
+        if (!res.ok) setError(typeof body.detail === "string" ? body.detail : "Could not load usage.");
+        else setCalls({ items: (body as UsageCalls).items, total: (body as UsageCalls).total });
+      } catch {
+        if (mine === callsSeq.current) setError("Could not load usage.");
+      }
+    })();
+  }, [callsKey]);
 
   useEffect(() => {
     void (async () => {
@@ -125,108 +122,27 @@ export default function UsagePage() {
     })();
   }, []);
 
-  async function loadMore() {
-    setLoadingMore(true);
-    try {
-      const res = await fetch(`/api/usage/calls${usageQuery({ ...JSON.parse(filterKey), limit: PAGE, offset: items.length })}`);
-      if (res.ok) {
-        const body: UsageCalls = await res.json();
-        setItems((prev) => [...prev, ...body.items]);
-        setTotal(body.total);
-      }
-    } finally {
-      setLoadingMore(false);
-    }
-  }
+  // Any change of what the table shows starts it again at its first page.
+  function choosePreset(id: PeriodId) { setPeriod(id); setPage(0); }
+  function chooseCustom(f: string, t: string) { setCustom({ from: f, to: t }); setPeriod("custom"); setPage(0); }
+  function filter(set: (v: string) => void) { return (v: string) => { set(v); setPage(0); }; }
 
-  function chooseCustom() {
-    if (period === "custom") return;
-    setCustomFrom(from);          // start from what is on screen, so the inputs are never empty
-    setCustomTo(to);
-    setPeriod("custom");
-  }
-
-  // The two dates always stay in order and never pass today.
-  function pickFrom(v: string) {
-    if (!v) return;
-    const day = v > todayStr ? todayStr : v;
-    setCustomFrom(day);
-    if (day > customTo) setCustomTo(day);
-  }
-
-  function pickTo(v: string) {
-    if (!v) return;
-    const day = v > todayStr ? todayStr : v;
-    setCustomTo(day);
-    if (day < customFrom) setCustomFrom(day);
-  }
-
+  const loaded = summary !== null && calls !== null;
   const totals = summary?.totals;
+  const days = daysBetween(from, to) + 1;
+  const failed = totals ? totals.failed + totals.lost : 0;
 
   return (
     <div className="l-dash-shell lu-shell">
-      <div className="l-dash-header">
-        <span className="l-kicker">Dashboard</span>
-        <h1>Usage</h1>
-        <p>How long each call ran, for embedded widgets and the test button.</p>
-      </div>
-
-      <div className="lu-filters" role="group" aria-label="Filters">
-        <div className="lu-pills" role="group" aria-label="Period">
-          {RANGES.map((r) => (
-            <button key={r.days} type="button" aria-pressed={period === r.days}
-              className={`l-voice-filter-pill${period === r.days ? " l-voice-filter-active" : ""}`}
-              onClick={() => setPeriod(r.days)}>
-              {r.label}
-            </button>
-          ))}
-          <button type="button" aria-pressed={period === "custom"}
-            className={`l-voice-filter-pill${period === "custom" ? " l-voice-filter-active" : ""}`}
-            onClick={chooseCustom}>
-            Custom
-          </button>
+      <div className="lu-head">
+        <div className="l-dash-header">
+          <span className="l-kicker">Dashboard</span>
+          <h1>Usage</h1>
+          <p>How long each session ran, for embedded widgets and the test button.</p>
         </div>
-        {period === "custom" ? (
-          <div className="lu-dates" role="group" aria-label="Date range">
-            <label className="lu-date">
-              <span>From</span>
-              <input type="date" value={customFrom} max={todayStr} aria-label="From date" onChange={(e) => pickFrom(e.target.value)} />
-            </label>
-            <label className="lu-date">
-              <span>To</span>
-              <input type="date" value={customTo} max={todayStr} aria-label="To date" onChange={(e) => pickTo(e.target.value)} />
-            </label>
-          </div>
+        {loaded ? (
+          <RangePicker period={period} from={from} to={to} today={today} onPreset={choosePreset} onCustom={chooseCustom} />
         ) : null}
-        <div className="lu-pills" role="group" aria-label="Type of call">
-          {KIND_FILTERS.map((k) => (
-            <button key={k.label} type="button" aria-pressed={kind === k.value}
-              className={`l-voice-filter-pill${kind === k.value ? " l-voice-filter-active" : ""}`}
-              onClick={() => setKind(k.value)}>
-              {k.label}
-            </button>
-          ))}
-        </div>
-        <label className="lu-select">
-          <span className="lu-sr">Status</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
-            {STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-        </label>
-        <label className="lu-select">
-          <span className="lu-sr">Agent</span>
-          <select value={agentId} onChange={(e) => setAgentId(e.target.value)} aria-label="Agent">
-            <option value="">All agents</option>
-            {agents.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </label>
-        <a className="l-btn l-btn-ghost lu-export" href={`/api/usage/export${usageQuery(filters)}`}>
-          Export CSV
-        </a>
       </div>
 
       {error ? <div className="lu-error" role="alert">{error}</div> : null}
@@ -241,159 +157,90 @@ export default function UsagePage() {
             Showing <strong>{formatDayRange(from, to)}</strong> · days and times in your timezone ({utcLabel(tz)})
           </p>
 
-          {totals ? (
-            <div className="lu-totals lu-totals-three" aria-label="Totals for this period">
-              <Stat label="Calls" value={formatCount(totals.calls)}
-                sub={[`${totals.completed} completed`, totals.failed ? `${totals.failed} failed` : "",
-                  totals.lost ? `${totals.lost} lost` : "", totals.active ? `${totals.active} running` : ""]
-                  .filter(Boolean).join(" · ")} warn={totals.failed > 0} />
-              <Stat label="Call time" value={formatMinutes(totals.call_seconds)} />
-              <Stat label="Tool calls" value={formatCount(totals.tool_calls)} />
+          <section className="lu-overview" aria-label="Totals and breakdown">
+            <div className="lu-tiles">
+              <button type="button" className={`lu-tile lu-tile-tab${metric === "calls" ? " lu-tile-on" : ""}`}
+                aria-pressed={metric === "calls"} onClick={() => setMetric("calls")}>
+                <span className="lu-tile-label">Sessions</span>
+                <span className="lu-tile-value">{formatCount(totals?.calls)}</span>
+                <span className="lu-tile-sub">
+                  {days > 1 ? `${perDay(totals?.calls ?? 0, days)} a day on average` : `${formatCount(totals?.completed)} completed`}
+                  {failed > 0 ? <span className="lu-warn"> · {formatCount(failed)} failed</span> : null}
+                </span>
+              </button>
+              <button type="button" className={`lu-tile lu-tile-tab${metric === "minutes" ? " lu-tile-on" : ""}`}
+                aria-pressed={metric === "minutes"} onClick={() => setMetric("minutes")}>
+                <span className="lu-tile-label">Minutes</span>
+                <span className="lu-tile-value">{minutesValue(totals?.call_seconds)}</span>
+                <span className="lu-tile-sub">
+                  {totals && totals.calls > 0 ? `${formatClock(totals.call_seconds / totals.calls)} average length` : "No sessions yet"}
+                </span>
+              </button>
+              <div className="lu-tile">
+                <span className="lu-tile-label">Tool calls</span>
+                <span className="lu-tile-value">{formatCount(totals?.tool_calls)}</span>
+                <span className="lu-tile-sub">
+                  {totals && totals.calls > 0 ? `${perDay(totals.tool_calls, totals.calls)} per session on average` : " "}
+                </span>
+              </div>
             </div>
-          ) : null}
-
-          {summary && summary.groups.length > 0 ? (
-            <section className="lu-section" aria-label="Breakdown">
-              <div className="lu-section-head">
-                <h2>Breakdown</h2>
-                <div className="lu-pills" role="group" aria-label="Group by">
-                  {GROUPS.map((g) => (
-                    <button key={g.value} type="button" aria-pressed={groupBy === g.value}
-                      className={`l-voice-filter-pill${groupBy === g.value ? " l-voice-filter-active" : ""}`}
-                      onClick={() => setGroupBy(g.value)}>
-                      {g.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="lu-table-wrap">
-                <table className="lu-table lu-breakdown">
-                  <thead>
-                    <tr>
-                      <th>{GROUPS.find((g) => g.value === groupBy)?.label}</th>
-                      <th className="lu-num">Calls</th>
-                      <th className="lu-num">Call time</th>
-                      <th className="lu-num">Failed</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summary.groups.map((g) => (
-                      <tr key={`${g.key}`}>
-                        <td>{groupBy === "kind" && g.key ? kindLabel(g.key) : g.label}</td>
-                        <td className="lu-num">{formatCount(g.calls)}</td>
-                        <td className="lu-num">{formatMinutes(g.call_seconds)}</td>
-                        <td className="lu-num">{g.failed + g.lost > 0 ? formatCount(g.failed + g.lost) : "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          ) : null}
-
-          <section className="lu-section" aria-label="Calls">
-            <div className="lu-section-head">
-              <h2>Calls</h2>
-              <span className="lu-count">{formatCount(total)} in this period</span>
-            </div>
-            {items.length === 0 ? (
-              <div className="l-empty-state">
-                <h2>No calls in this period</h2>
-                <p>Calls appear here after a visitor talks to a widget or you press Test on an agent.</p>
-              </div>
-            ) : (
-              <div className="lu-table-wrap">
-                <table className="lu-table lu-calls">
-                  <thead>
-                    <tr>
-                      <th>Started</th>
-                      <th>Agent</th>
-                      <th>Type</th>
-                      <th className="lu-num">Call time</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((c) => (
-                      <Fragment key={c.id}>
-                        <tr className={`lu-row${open === c.id ? " lu-row-open" : ""}`} onClick={() => setOpen(open === c.id ? null : c.id)}>
-                          <td>
-                            <button type="button" className="lu-expand" aria-expanded={open === c.id}
-                              aria-label={`Details for the call started ${c.started_at ?? ""}`}
-                              onClick={(e) => { e.stopPropagation(); setOpen(open === c.id ? null : c.id); }}>
-                              {c.started_at ? new Date(c.started_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—"}
-                            </button>
-                          </td>
-                          <td>{c.agent_name ?? "(deleted agent)"}</td>
-                          <td><span className={`lu-kind lu-kind-${c.kind}`}>{kindLabel(c.kind)}</span></td>
-                          <td className="lu-num">{formatSeconds(c.call_seconds)}</td>
-                          <td>
-                            <span className={`l-status-badge ${statusBadgeClass(c.status)}`}>{statusLabel(c.status)}</span>
-                          </td>
-                        </tr>
-                        {open === c.id ? (
-                          <tr className="lu-detail-row">
-                            <td colSpan={5}><CallDetail call={c} /></td>
-                          </tr>
-                        ) : null}
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {items.length < total ? (
-              <div className="lu-more">
-                <button type="button" className="l-btn l-btn-ghost" onClick={() => void loadMore()} disabled={loadingMore}>
-                  {loadingMore ? "Loading…" : `Show more (${formatCount(total - items.length)} left)`}
-                </button>
-              </div>
-            ) : null}
+            <UsageChart metric={metric} view={view} onView={setView} unit={unit} tzLabel={utcLabel(tz)} busy={summaryBusy}
+              buckets={view === "time" && summary ? buildBuckets(summary.groups, unit, from, to) : []}
+              categories={view !== "time" && summary ? buildCategories(summary.groups, view, metric) : []} />
           </section>
 
+          <section className="lu-card lu-sessions" aria-label="Sessions">
+            <div className="lu-toolbar">
+              <div className="lu-toolbar-title">
+                <h2>Sessions</h2>
+                <span className="lu-count">{formatCount(calls.total)} in this period</span>
+              </div>
+              <div className="lu-toolbar-tools">
+                <Select label="Type" value={kind} options={TYPES} onChange={filter(setKind)} />
+                <Select label="Status" value={status} options={STATUSES} onChange={filter(setStatus)} />
+                <Select label="Agent" value={agentId} onChange={filter(setAgentId)}
+                  options={[{ label: "All agents", value: "" }, ...agents.map((a) => ({ label: a.name, value: a.id }))]} />
+                <a className="l-btn l-btn-ghost lu-export" href={`/api/usage/export${usageQuery(tableFilters)}`}>
+                  <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                    <path d="M7 1.5v7.5M3.8 6 7 9.2 10.2 6M2 12h10" fill="none" stroke="currentColor" strokeWidth="1.4"
+                      strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Export
+                </a>
+              </div>
+            </div>
+            {calls.items.length === 0 ? (
+              <div className="l-empty-state lu-empty">
+                <h2>No sessions in this period</h2>
+                <p>Sessions appear here after a visitor talks to a widget or you press Test on an agent.</p>
+              </div>
+            ) : (
+              <SessionsTable items={calls.items} total={calls.total} page={page} pageSize={pageSize}
+                onPage={setPage} onPageSize={(n) => { setPageSize(n); setPage(0); }} />
+            )}
+          </section>
         </>
       )}
     </div>
   );
 }
 
-function Stat({ label, value, sub, warn }: { label: string; value: string; sub?: string; warn?: boolean }) {
-  return (
-    <div className={`lu-stat${warn ? " lu-stat-warn" : ""}`}>
-      <div className="lu-stat-label">{label}</div>
-      <div className="lu-stat-value">{value}</div>
-      {sub ? <div className="lu-stat-sub">{sub}</div> : null}
-    </div>
-  );
+/** 36 · 2.4: a per-day (or per-session) average, one decimal while it is small. */
+function perDay(n: number, over: number): string {
+  const v = over > 0 ? n / over : 0;
+  return v < 10 ? v.toLocaleString("en-US", { maximumFractionDigits: 1 }) : Math.round(v).toLocaleString("en-US");
 }
 
-// The flags a call's owner is told about; anything else on a call (an administrator's own notes) is not shown here.
-const FLAG_LABELS: Record<string, string> = { failed: "Failed", lost: "Lost" };
-
-function CallDetail({ call }: { call: UsageItem }) {
-  const [transcript, setTranscript] = useState(false);
-  const flags = call.flags.filter((f) => f in FLAG_LABELS);
+function Select({ label, value, options, onChange }: {
+  label: string; value: string; options: { label: string; value: string }[]; onChange: (v: string) => void;
+}) {
   return (
-    <div className="lu-detail">
-      <dl className="lu-facts">
-        <div><dt>How it ended</dt><dd>{call.status === "active" ? "Still running" : endReasonLabel(call.end_reason)}</dd></div>
-        <div><dt>Call length</dt><dd>{formatSeconds(call.duration_seconds)}</dd></div>
-        <div><dt>Voice</dt><dd>{call.voice ?? "—"}</dd></div>
-        {call.origin ? <div><dt>Page</dt><dd>{call.origin}</dd></div> : null}
-        <div><dt>Tool calls</dt><dd>{formatCount(call.tool_calls)}</dd></div>
-        <div>
-          <dt>Transcript</dt>
-          <dd>
-            <button type="button" className="l-btn l-btn-ghost lu-transcript-btn" onClick={() => setTranscript(true)}>
-              View transcript
-            </button>
-          </dd>
-        </div>
-      </dl>
-      {flags.length > 0 ? (
-        <div className="lu-flags">{flags.map((f) => <span key={f} className="lu-flag">{FLAG_LABELS[f]}</span>)}</div>
-      ) : null}
-      {transcript ? <TranscriptDialog call={call} onClose={() => setTranscript(false)} /> : null}
-    </div>
+    <label className="lu-select">
+      <span className="lu-sr">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <Chevron />
+    </label>
   );
 }

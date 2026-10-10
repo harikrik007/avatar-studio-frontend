@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatOffset, type CallTranscript, type UsageItem } from "@/lib/usage";
 
-/** The call's conversation, turn by turn (the visitor's words and the agent's), in a dialog over the Usage page. Calls from before
+/** The session's conversation, turn by turn (the visitor's words and the agent's), in a dialog over the Usage page. Sessions from before
  * transcripts were kept have none, and the dialog says so. Closes on Close, Esc or a click outside it. */
 export default function TranscriptDialog({ call, onClose }: { call: UsageItem; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -60,7 +60,7 @@ export default function TranscriptDialog({ call, onClose }: { call: UsageItem; o
             <p className="lu-transcript-empty">Loading…</p>
           ) : data.lines.length === 0 ? (
             <p className="lu-transcript-empty">
-              No transcript for this call. Transcripts are kept for calls from 10 October 2026 on.
+              No transcript for this session. Transcripts are kept for sessions from 10 October 2026 on.
             </p>
           ) : (
             <ol className="lu-turns">
