@@ -217,7 +217,7 @@ export default function HeroCall({ personas }: { personas: LandingPersona[] }) {
         onSessionEnded: (reason) => {
           if (!sessionRef.current) return;
           if (reason === "idle_timeout") void endSession("idle_timeout");
-          else if (reason === "end_call") void endSession("agent_ended");
+          else if (reason === "end_call" || reason === "out_of_minutes") void endSession("agent_ended");
         },
         onDisconnected: () => {
           if (sessionRef.current) void endSession("visitor_closed");

@@ -1,0 +1,181 @@
+/* The Plan page (app/dashboardv2/billing) and the minutes banner in the dashboard layout. Built on landing.css's tokens. */
+
+.landing .lpl-shell {
+  max-width: 720px;
+  width: 100%;
+  min-width: 0;
+}
+
+.landing .lpl-muted {
+  color: var(--l-muted);
+}
+
+.landing .lpl-preview {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: var(--l-radius);
+  border: 1px dashed var(--l-border);
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+}
+
+.landing .lpl-card {
+  background: var(--l-bg-raised);
+  border: 1px solid var(--l-border);
+  border-radius: var(--l-radius);
+  padding: 22px 24px;
+  margin-bottom: 32px;
+}
+
+.landing .lpl-empty p {
+  margin: 0 0 8px;
+}
+
+.landing .lpl-empty a,
+.landing .lpl-note a {
+  color: var(--l-accent);
+}
+
+.landing .lpl-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.landing .lpl-label {
+  display: block;
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+  margin-bottom: 4px;
+}
+
+.landing .lpl-plan {
+  margin: 0;
+  font-family: var(--font-display), sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.landing .lpl-big {
+  margin: 0 0 10px;
+  font-size: 16px;
+  color: var(--l-muted);
+}
+
+.landing .lpl-big strong {
+  color: var(--l-fg);
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font-display), sans-serif;
+  margin-right: 2px;
+}
+
+.landing .lpl-bar {
+  height: 8px;
+  border-radius: 100px;
+  background: rgba(223, 248, 255, 0.08);
+  overflow: hidden;
+}
+
+.landing .lpl-bar span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 100px;
+  background: var(--l-accent);
+  transition: width 0.3s ease;
+}
+
+.landing .lpl-bar-warn span {
+  background: #fbbf24;
+}
+
+.landing .lpl-bar-out span {
+  background: #f87171;
+}
+
+.landing .lpl-left {
+  margin: 10px 0 0;
+  font-size: var(--l-fs-body);
+}
+
+.landing .lpl-left-out {
+  color: #fca5a5;
+}
+
+.landing .lpl-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px 24px;
+  margin: 22px 0 0;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--l-border);
+}
+
+.landing .lpl-facts dt {
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+  margin-bottom: 4px;
+}
+
+.landing .lpl-facts dd {
+  margin: 0;
+  font-size: var(--l-fs-body);
+}
+
+.landing .lpl-note {
+  margin: 18px 0 0;
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+  line-height: 1.5;
+}
+
+/* ---- the minutes banner over every dashboard page (not the builder) ---- */
+.landing .lpl-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  /* above the page's own column (each page sets its width): inset from the edges like a card, not glued to the bar */
+  margin: 16px 24px 0;
+  padding: 10px 14px;
+  border-radius: var(--l-radius);
+  font-size: var(--l-fs-helper);
+  line-height: 1.45;
+}
+
+.landing .lpl-banner-warn {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #fcd34d;
+}
+
+.landing .lpl-banner-out {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  color: #fca5a5;
+}
+
+.landing .lpl-banner a {
+  color: inherit;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .landing .lpl-card {
+    padding: 18px 16px;
+  }
+
+  .landing .lpl-banner {
+    margin: 12px 16px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .lpl-bar span {
+    transition: none;
+  }
+}

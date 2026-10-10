@@ -313,6 +313,13 @@ export function LiveTestPanel({
         try {
           const msg = JSON.parse(new TextDecoder().decode(payload));
           if (vision.handleMessage(msg, room)) return;
+          if (msg.type === "session_end" && msg.reason === "out_of_minutes") {
+            // The account's minutes ran out mid-call (the backend ends it): say so here instead of closing the panel.
+            intentionalDisconnectRef.current = true;
+            setError("The test call ended: your minutes are used up. See Plan for details.");
+            setState("error");
+            return;
+          }
           if (msg.type === "client_tool_call" && msg.awaitResult) {
             // The test drive has no host page to run a client tool in, so it
             // answers for one (PLAN.md decision 3); the call and this answer

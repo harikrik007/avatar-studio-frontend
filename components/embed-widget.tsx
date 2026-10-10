@@ -449,8 +449,9 @@ export function EmbedWidget({ publicKey, accentColor, greetingLabel, agentName, 
           },
           onSessionEnded: (reason) => {
             if (reason === "idle_timeout") void endSession("idle_timeout");
-            // the agent hung up (its end_call tool) after saying goodbye
-            else if (reason === "end_call") void endSession("agent_ended");
+            // the agent hung up (its end_call tool) after saying goodbye; or the owner's minutes ran out, which the visitor is
+            // not told (the next start says the assistant isn't available)
+            else if (reason === "end_call" || reason === "out_of_minutes") void endSession("agent_ended");
           },
           onDisconnected: () => {
             void endSession("visitor_closed");

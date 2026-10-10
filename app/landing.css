@@ -2100,6 +2100,16 @@ html {
     margin-top: 0;
   }
 
+  /* Three links (Agent, Usage, Plan) and the account do not fit a phone's width with the icons: the words stay. */
+  .landing .l-sidebar-link {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .landing .l-sidebar-nav:has(> .l-sidebar-link:nth-child(3)) .l-sidebar-link svg {
+    display: none;
+  }
+
   /* Connectors are dropped rather than shrunk: once the rail wraps, a
      connector can land at the start of a line pointing at nothing. */
   .landing .l-flow-rail {

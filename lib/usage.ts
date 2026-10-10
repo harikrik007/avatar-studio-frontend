@@ -79,6 +79,7 @@ export function endReasonLabel(reason: string | null): string {
     backend_shutdown: "Server restarted",
     room_disconnected: "Connection lost",
     lost: "Lost (server restarted)",
+    out_of_minutes: "Out of minutes",
   };
   return map[reason] ?? reason.replace(/_/g, " ");
 }

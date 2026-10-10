@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import "../landing.css";
+import "./billing/billing.css";
 import { inter, jetbrainsMono, spaceGrotesk } from "../landing-fonts";
+import { allowanceMinutes, minutesLevel, outOfMinutesText, useBilling, usedMinutes } from "@/lib/billing";
 
 // Copied from the v1 dashboard's layout. The difference is the nav: v1 has
 // "My Avatars" because a Wav2Lip avatar is something you create and manage;
@@ -32,10 +34,21 @@ function UsageIcon() {
   );
 }
 
+function PlanIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M8 5v3l2 1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 const NAV_ITEMS = [
   { href: "/dashboardv2/agents", label: "Agent", Icon: AgentsIcon },
   { href: "/dashboardv2/usage", label: "Usage", Icon: UsageIcon },
 ];
+// Shown only once the account has minutes to show (lib/billing: hidden while minutes are not switched on).
+const PLAN_ITEM = { href: "/dashboardv2/billing", label: "Plan", Icon: PlanIcon };
 
 export default function DashboardV2Layout({ children }: { children: React.ReactNode }) {
   const { data: session } = useSession();
@@ -45,6 +58,10 @@ export default function DashboardV2Layout({ children }: { children: React.ReactN
   // editor with its own back link to the list, so it gets the whole width --
   // the rail (one nav item + account) only took room from the preview there.
   const isBuilder = /^\/dashboardv2\/agents\/[^/]+/.test(pathname ?? "");
+  const billing = useBilling();
+  const navItems = billing?.shown ? [...NAV_ITEMS, PLAN_ITEM] : NAV_ITEMS;
+  const level = minutesLevel(billing);
+  const onPlanPage = pathname?.startsWith(PLAN_ITEM.href);
 
   return (
     <main className={`landing ${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}${isBuilder ? " l-builder-page" : ""}`}>
@@ -68,7 +85,7 @@ export default function DashboardV2Layout({ children }: { children: React.ReactN
         {isBuilder ? null : (
           <aside className="l-sidebar">
             <div className="l-sidebar-nav">
-              {NAV_ITEMS.map(({ href, label, Icon }) => (
+              {navItems.map(({ href, label, Icon }) => (
                 <Link
                   key={href}
                   href={href}
@@ -102,7 +119,19 @@ export default function DashboardV2Layout({ children }: { children: React.ReactN
             ) : null}
           </aside>
         )}
-        <div className="l-dash-main">{children}</div>
+        <div className="l-dash-main">
+          {!isBuilder && !onPlanPage && billing?.meter && level !== "ok" ? (
+            <div className={`lpl-banner lpl-banner-${level}`} role="status">
+              <span>
+                {level === "out"
+                  ? `${outOfMinutesText(billing)} Your agents can't take sessions until minutes are added.`
+                  : `You've used ${usedMinutes(billing.meter)} of your ${allowanceMinutes(billing.meter)} minutes.`}
+              </span>
+              <Link href={PLAN_ITEM.href}>See your plan</Link>
+            </div>
+          ) : null}
+          {children}
+        </div>
       </div>
     </main>
   );
