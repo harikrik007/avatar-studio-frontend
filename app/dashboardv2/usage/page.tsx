@@ -11,6 +11,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import "./usage.css";
+import TranscriptDialog from "./TranscriptDialog";
 import {
   KIND_FILTERS,
   endReasonLabel,
@@ -366,20 +367,33 @@ function Stat({ label, value, sub, warn }: { label: string; value: string; sub?:
   );
 }
 
+// The flags a call's owner is told about; anything else on a call (an administrator's own notes) is not shown here.
+const FLAG_LABELS: Record<string, string> = { failed: "Failed", lost: "Lost" };
+
 function CallDetail({ call }: { call: UsageItem }) {
+  const [transcript, setTranscript] = useState(false);
+  const flags = call.flags.filter((f) => f in FLAG_LABELS);
   return (
     <div className="lu-detail">
       <dl className="lu-facts">
         <div><dt>How it ended</dt><dd>{call.status === "active" ? "Still running" : endReasonLabel(call.end_reason)}</dd></div>
         <div><dt>Call length</dt><dd>{formatSeconds(call.duration_seconds)}</dd></div>
-        <div><dt>Pipeline</dt><dd>{call.pipeline === "cascade" ? "Cascade" : "Gemini Live"}{call.model ? ` · ${call.model.replace("models/", "")}` : ""}</dd></div>
         <div><dt>Voice</dt><dd>{call.voice ?? "—"}</dd></div>
         {call.origin ? <div><dt>Page</dt><dd>{call.origin}</dd></div> : null}
         <div><dt>Tool calls</dt><dd>{formatCount(call.tool_calls)}</dd></div>
+        <div>
+          <dt>Transcript</dt>
+          <dd>
+            <button type="button" className="l-btn l-btn-ghost lu-transcript-btn" onClick={() => setTranscript(true)}>
+              View transcript
+            </button>
+          </dd>
+        </div>
       </dl>
-      {call.flags.length > 0 ? (
-        <div className="lu-flags">{call.flags.map((f) => <span key={f} className="lu-flag">{f === "lost" ? "Lost" : "Failed"}</span>)}</div>
+      {flags.length > 0 ? (
+        <div className="lu-flags">{flags.map((f) => <span key={f} className="lu-flag">{FLAG_LABELS[f]}</span>)}</div>
       ) : null}
+      {transcript ? <TranscriptDialog call={call} onClose={() => setTranscript(false)} /> : null}
     </div>
   );
 }

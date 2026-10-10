@@ -11,8 +11,6 @@ export type UsageItem = {
   agent_id: string | null;
   agent_name: string | null;
   origin: string | null;
-  pipeline: string;
-  model: string | null;
   voice: string | null;
   started_at: string | null;
   ended_at: string | null;
@@ -83,6 +81,18 @@ export function endReasonLabel(reason: string | null): string {
     lost: "Lost (server restarted)",
   };
   return map[reason] ?? reason.replace(/_/g, " ");
+}
+
+/** One turn of a call's conversation (GET /api/usage/calls/:id/transcript): the visitor's words or the agent's. */
+export type TranscriptLine = { n: number; at: string | null; role: "visitor" | "agent"; text: string; offset_seconds: number | null };
+export type CallTranscript = { call_id: string; agent_name: string | null; started_at: string | null; lines: TranscriptLine[] };
+
+/** 0:07 · 2:41 · 1:02:05: how far into the call a turn began. */
+export function formatOffset(s: number | null | undefined): string {
+  if (s === null || s === undefined) return "";
+  const t = Math.max(0, Math.round(s));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = String(t % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
 }
 
 /** 42 s · 3 m 12 s · 1 h 05 m. Null when the call has no measurement. */

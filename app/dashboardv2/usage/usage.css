@@ -339,3 +339,118 @@
     margin-left: 0;
   }
 }
+
+
+/* The Transcript dialog (TranscriptDialog.tsx): the call's conversation, turn by turn. */
+.landing .lu-transcript-btn {
+  padding: 4px 12px;
+  font-size: var(--l-fs-helper);
+}
+
+.landing .lu-dialog {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(80vh, 760px);
+  padding: 0;
+  border: 1px solid var(--l-border);
+  border-radius: 16px;
+  background: var(--l-bg-raised);
+  color: var(--l-fg);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+
+.landing .lu-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.landing .lu-dialog-inner {
+  display: flex;
+  flex-direction: column;
+  max-height: min(80vh, 760px);
+}
+
+.landing .lu-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--l-border);
+}
+
+.landing .lu-dialog-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.landing .lu-dialog-sub {
+  margin: 4px 0 0;
+  color: var(--l-muted);
+  font-size: var(--l-fs-helper);
+}
+
+.landing .lu-dialog-close {
+  flex-shrink: 0;
+}
+
+.landing .lu-transcript {
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+}
+
+.landing .lu-transcript-empty {
+  margin: 8px 0;
+  color: var(--l-muted);
+}
+
+.landing .lu-turns {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.landing .lu-turn {
+  max-width: 88%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--l-border);
+  background: var(--l-bg);
+}
+
+.landing .lu-turn-agent {
+  align-self: flex-start;
+}
+
+.landing .lu-turn-visitor {
+  align-self: flex-end;
+  border-color: rgba(0, 195, 255, 0.35);
+}
+
+.landing .lu-turn-meta {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin-bottom: 4px;
+  font-size: var(--l-fs-helper);
+  color: var(--l-muted);
+}
+
+.landing .lu-turn-who {
+  font-weight: 600;
+  color: var(--l-fg);
+}
+
+.landing .lu-turn-text {
+  margin: 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 640px) {
+  .landing .lu-turn {
+    max-width: 100%;
+  }
+}
