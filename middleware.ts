@@ -6,8 +6,9 @@ import { auth } from "@/auth";
 // causing real friction on mobile). /, /pricing, /login, and NextAuth's
 // own routes stay public (and the site icon and share image they point at);
 // /onboarding needs a session but not yet a company_name (that's what it's
-// collecting); everything else needs both.
-const PUBLIC_PATHS = new Set(["/", "/pricing", "/icon.svg", "/opengraph-image.png", "/opengraph-image.alt.txt"]);
+// collecting); everything else needs both. /login-avatar.webp is the face
+// on the sign-in page itself, which nobody looking at it has a session for.
+const PUBLIC_PATHS = new Set(["/", "/pricing", "/icon.svg", "/opengraph-image.png", "/opengraph-image.alt.txt", "/login-avatar.webp"]);
 const ONBOARDING_PATHS = new Set(["/onboarding", "/api/onboarding"]);
 
 const API_URL = process.env.AVATAR_STUDIO_API_URL || "http://127.0.0.1:8095";

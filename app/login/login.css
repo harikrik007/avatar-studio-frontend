@@ -1,0 +1,180 @@
+/* The sign-in page (app/login/page.tsx): the form on the left, a panel with the landing page's face on the right. Built on
+   landing.css's tokens; nothing here is shared (the onboarding page keeps .l-login-*). */
+
+.landing.ll {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 100vh;
+  /* what the cut-out face stands on: the same backdrop as the agents page's cards */
+  --ll-panel: radial-gradient(120% 80% at 50% 0%, #1f3a45 0%, #17252b 52%, #141a1d 100%);
+}
+
+/* ---- the left half: brand in the corner, the way in at the centre ---- */
+.landing .ll-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 28px 40px 40px;
+}
+
+.landing .ll-brand {
+  align-self: flex-start;
+  font-family: var(--font-display), sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  color: var(--l-fg);
+  text-decoration: none;
+}
+
+.landing .ll-form {
+  width: 100%;
+  max-width: 400px;
+  margin: auto;
+  text-align: center;
+  /* a little above the true centre, where the eye puts the middle */
+  padding-bottom: 8vh;
+}
+
+.landing .ll-form h1 {
+  font-family: var(--font-display), sans-serif;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 32px;
+}
+
+.landing .ll-provider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  height: 46px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--l-fg);
+  background: var(--l-bg-raised);
+  border: 1px solid var(--l-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.landing .ll-provider:hover {
+  background: var(--l-bg-raised-hover);
+  border-color: rgba(223, 248, 255, 0.28);
+}
+
+.landing .ll-provider:focus-visible,
+.landing .ll-brand:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
+.landing .ll-mark {
+  flex-shrink: 0;
+}
+
+.landing .ll-note {
+  margin: 28px 0 0;
+  color: var(--l-muted);
+  font-size: var(--l-fs-body);
+  line-height: 1.5;
+}
+
+/* ---- the right half: a panel set in from the window's edge, the face running off its foot ---- */
+.landing .ll-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 12px 12px 12px 0;
+  padding: 36px 40px 0;
+  border-radius: 20px;
+  border: 1px solid var(--l-border);
+  background: var(--ll-panel);
+  overflow: hidden;
+}
+
+.landing .ll-pitch {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  max-width: 620px;
+  margin: 0 auto;
+}
+
+.landing .ll-figure {
+  flex-shrink: 0;
+  font-family: var(--font-display), sans-serif;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--l-accent);
+  white-space: nowrap;
+}
+
+.landing .ll-pitch-text {
+  min-width: 0;
+}
+
+.landing .ll-pitch-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--l-fg);
+}
+
+.landing .ll-pitch-sub {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--l-muted);
+}
+
+.landing .ll-face {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: min(68vh, 720px);
+  margin: auto auto 0;
+  padding-top: 24px;
+  object-fit: contain;
+  object-position: bottom;
+  /* her shoulders run to the photo's own left and right edges: faded out there, so no cut line shows */
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%);
+}
+
+/* ---- narrower than two comfortable halves: the form has the screen ---- */
+@media (max-width: 900px) {
+  .landing.ll {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .landing .ll-panel {
+    display: none;
+  }
+
+  .landing .ll-side {
+    padding: 22px 20px 32px;
+  }
+
+  .landing .ll-form h1 {
+    font-size: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .ll-provider {
+    transition: none;
+  }
+}
