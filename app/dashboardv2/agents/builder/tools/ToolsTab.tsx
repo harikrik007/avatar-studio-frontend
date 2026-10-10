@@ -7,9 +7,11 @@
  * happens in ToolDialog. Every change here only edits the builder's form --
  * the agent's own Save persists it, as with every other tab.
  *
- * Accounts that have connectors (lib/features) also get "Connector" in the
- * menu and a CONNECTORS group: an action of an app the owner has connected
- * (a calendar, a mailbox, a sheet), added and edited in ConnectorDialog.
+ * Accounts that have connectors (lib/features; every account since
+ * 2026-10-10) also get "Connector" in the menu and a CONNECTORS group: an
+ * action of an app the owner has connected (a calendar, a mailbox, a sheet),
+ * added and edited in ConnectorDialog. Connectors are tagged Beta wherever
+ * they are named.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -245,7 +247,7 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
               </ToolGroup>
             ) : null}
             {connectors.length ? (
-              <ToolGroup label="Connectors">
+              <ToolGroup label="Connectors" beta>
                 {connectors.map((t) => (
                   <ToolRow
                     key={t.id}
@@ -319,7 +321,8 @@ function AddMenu({ onClient, onServer, onConnector, onClose }: {
             <PlugIcon />
           </span>
           <span className="lb-menu-text">
-            Connector<span className="lb-menu-sub">Uses an app you connect</span>
+            Connector <BetaTag />
+            <span className="lb-menu-sub">Uses an app you connect</span>
           </span>
         </button>
       ) : null}
@@ -332,10 +335,18 @@ function toolDescription(tool: Tool): string {
   return tool.type === "system" ? (SYSTEM_TOOLS[tool.name] ?? "") : "";
 }
 
-function ToolGroup({ label, children }: { label: string; children: React.ReactNode }) {
+/** Connectors are in beta (Hari, 2026-10-10): said next to their name in the menu, the list and the dialog. */
+export function BetaTag() {
+  return <span className="lb-beta">Beta</span>;
+}
+
+function ToolGroup({ label, beta, children }: { label: string; beta?: boolean; children: React.ReactNode }) {
   return (
     <div className="lb-tool-group">
-      <div className="lb-group-label">{label}</div>
+      <div className="lb-group-label">
+        {label}
+        {beta ? <> <BetaTag /></> : null}
+      </div>
       <ul className="lb-tool-list">{children}</ul>
     </div>
   );

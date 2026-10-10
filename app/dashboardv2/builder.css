@@ -2155,6 +2155,29 @@
   width: min(680px, calc(100vw - 24px));
 }
 
+/* Connectors are in beta: the tag beside their name in the Add tool menu, the tool list and the dialog */
+.landing .lb-beta {
+  display: inline-block;
+  vertical-align: middle;
+  font-family: var(--font-body), sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 6px;
+  border-radius: 100px;
+  color: var(--l-accent);
+  border: 1px solid rgba(0, 195, 255, 0.4);
+  background: rgba(0, 195, 255, 0.08);
+}
+
+.landing .lb-cx-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .landing .lb-cx-apps,
 .landing .lb-cx-actions,
 .landing .lb-cx-params {

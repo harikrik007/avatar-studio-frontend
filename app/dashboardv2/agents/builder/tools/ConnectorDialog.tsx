@@ -270,7 +270,10 @@ export default function ConnectorDialog({
       <div className="lb-dialog-inner">
         <header className="lb-dialog-head">
           <div>
-            <h2 id="lb-cx-title">{isNew ? "Add connector" : "Edit connector"}</h2>
+            <div className="lb-cx-title">
+              <h2 id="lb-cx-title">{isNew ? "Add connector" : "Edit connector"}</h2>
+              <span className="lb-beta">Beta</span>
+            </div>
             <p>
               {step === "apps" ? "Connect an app, then pick what your agent may do in it."
                 : step === "actions" ? `Pick one thing your agent may do in ${appInfo?.name ?? "this app"}.`
