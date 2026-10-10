@@ -2149,3 +2149,258 @@
     margin-right: 14px;
   }
 }
+
+/* ---- Connectors (builder/tools/ConnectorDialog.tsx): an app the owner connects, and the actions an agent may use ---- */
+.landing .lb-cx {
+  width: min(680px, calc(100vw - 24px));
+}
+
+.landing .lb-cx-apps,
+.landing .lb-cx-actions,
+.landing .lb-cx-params {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.landing .lb-cx-app {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1, transparent);
+}
+
+.landing .lb-cx-logo {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
+  padding: 5px;
+}
+
+.landing .lb-cx-logo-sm {
+  flex-basis: 20px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  padding: 2px;
+}
+
+.landing .lb-cx-logo-fallback {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.landing .lb-cx-app-text {
+  flex: 1 1 0;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.landing .lb-cx-app-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.landing .lb-cx-app-desc,
+.landing .lb-cx-action-desc {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.landing .lb-cx-waiting {
+  font-size: 12px;
+  color: #fbbf24;
+}
+
+.landing .lb-cx-app-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.landing .lb-cx-chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  padding: 0 8px;
+  border-radius: 100px;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+}
+
+.landing .lb-cx-on,
+.landing .lb-cx-read {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+.landing .lb-cx-write {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.landing .lb-cx-risky {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.landing .lb-cx-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 13px;
+}
+
+.landing .lb-cx-bar-app {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.landing .lb-cx-actions {
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  gap: 4px;
+  padding-right: 2px;
+}
+
+.landing .lb-cx-action {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.landing .lb-cx-action:hover,
+.landing .lb-cx-action:focus-visible {
+  background: var(--surface-3);
+  border-color: var(--border);
+  outline: none;
+}
+
+.landing .lb-cx-action-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.landing .lb-cx-action-name {
+  font-weight: 600;
+  min-width: 0;
+}
+
+.landing .lb-cx-params {
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-height: min(40vh, 360px);
+  overflow-y: auto;
+}
+
+.landing .lb-cx-param {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 220px);
+  align-items: start;
+  gap: 6px 12px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.landing .lb-cx-param:last-child {
+  border-bottom: none;
+}
+
+.landing .lb-cx-param-on {
+  grid-template-columns: minmax(0, 1fr);
+  background: rgba(0, 195, 255, 0.04);
+}
+
+.landing .lb-cx-param-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.landing .lb-cx-param-main input {
+  margin-top: 3px;
+  accent-color: var(--l-accent);
+}
+
+.landing .lb-cx-param-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.landing .lb-cx-param-name {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.landing .lb-cx-param-desc {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.landing .lb-cx-fixed {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.landing .lb-cx-fixed .lb-input {
+  font-size: 12px;
+  padding: 6px 8px;
+}
+
+@media (max-width: 640px) {
+  .landing .lb-cx-app {
+    flex-wrap: wrap;
+  }
+
+  .landing .lb-cx-app-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .landing .lb-cx-param {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

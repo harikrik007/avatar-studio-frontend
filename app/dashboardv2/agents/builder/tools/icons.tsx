@@ -24,6 +24,12 @@ export const BoltIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const PlugIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5.5 1.5v3M10.5 1.5v3M3.5 4.5h9v3a4.5 4.5 0 0 1-9 0zM8 12v2.5" />
+  </Svg>
+);
+
 export const DocIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M4 1.5h5.5L12.5 4.5v10h-8.5zM9.5 1.5v3h3M6 8h4.5M6 10.5h4.5" />

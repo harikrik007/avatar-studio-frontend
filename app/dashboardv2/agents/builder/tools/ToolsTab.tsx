@@ -6,16 +6,23 @@
  * filter and SYSTEM / CUSTOM groups. Rows toggle a tool on or off; editing
  * happens in ToolDialog. Every change here only edits the builder's form --
  * the agent's own Save persists it, as with every other tab.
+ *
+ * Accounts that have connectors (lib/features) also get "Connector" in the
+ * menu and a CONNECTORS group: an action of an app the owner has connected
+ * (a calendar, a mailbox, a sheet), added and edited in ConnectorDialog.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useFeatures } from "@/lib/features";
 import {
   SYSTEM_TOOLS,
+  isConnector,
   isCustom,
   newClientTool,
   newWebhook,
   toolKind,
   toolTypeChip,
+  type ConnectorTool,
   type CustomTool,
   type SystemTool,
   type Tool,
@@ -23,8 +30,9 @@ import {
 } from "@/lib/tools/model";
 import type { AgentForm } from "../../useAgentForm";
 import { SectionCard, Switch } from "../tabs";
+import ConnectorDialog from "./ConnectorDialog";
 import ToolDialog from "./ToolDialog";
-import { BoltIcon, BracesIcon, CopyIcon, FilterIcon, PencilIcon, SearchIcon, TrashIcon } from "./icons";
+import { BoltIcon, BracesIcon, CopyIcon, FilterIcon, PencilIcon, PlugIcon, SearchIcon, TrashIcon } from "./icons";
 
 type TypeFilter = "all" | ToolKind;
 const TYPE_FILTERS: { id: TypeFilter; label: string }[] = [
@@ -32,6 +40,7 @@ const TYPE_FILTERS: { id: TypeFilter; label: string }[] = [
   { id: "system", label: "System" },
   { id: "client", label: "Client" },
   { id: "webhook", label: "Webhook" },
+  { id: "connector", label: "Connector" },
   { id: "knowledge", label: "Knowledge" },
 ];
 
@@ -42,7 +51,10 @@ const TOOL_PROVIDERS = new Set(["anam"]);
 export default function ToolsTab({ f }: { f: AgentForm }) {
   const tools = f.form.tools;
   const setTools = (next: Tool[]) => f.update("tools", next);
+  const features = useFeatures();
   const [editing, setEditing] = useState<{ tool: CustomTool; isNew: boolean } | null>(null);
+  // the connector dialog: adding one (tool null) or editing one
+  const [connector, setConnector] = useState<{ tool: ConnectorTool | null } | null>(null);
   const [menu, setMenu] = useState(false);
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -80,7 +92,7 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
       ),
     [tools]
   );
-  const rowsAll: Tool[] = useMemo(() => [...systemTools, ...tools.filter(isCustom)], [systemTools, tools]);
+  const rowsAll: Tool[] = useMemo(() => [...systemTools, ...tools.filter(isCustom), ...tools.filter(isConnector)], [systemTools, tools]);
   const visible = useMemo(
     () =>
       rowsAll.filter((t) => {
@@ -91,7 +103,8 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
     [rowsAll, typeFilter, debounced]
   );
   const system = visible.filter((t) => toolKind(t) === "system");
-  const custom = visible.filter((t) => toolKind(t) !== "system");
+  const custom = visible.filter(isCustom);
+  const connectors = visible.filter(isConnector);
 
   // the empty-state line under CUSTOM, only while nothing filters the list
   const noCustomYet = !tools.some(isCustom) && !debounced && (typeFilter === "all" || typeFilter === "webhook" || typeFilter === "client");
@@ -113,11 +126,12 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
 
   function closeDialog() {
     setEditing(null);
+    setConnector(null);
     // focus goes back to where the dialog was opened from
     setTimeout(() => addRef.current?.focus(), 0);
   }
 
-  function saveTool(tool: CustomTool) {
+  function saveTool(tool: CustomTool | ConnectorTool) {
     const exists = tools.some((t) => t.id === tool.id);
     setTools(exists ? tools.map((t) => (t.id === tool.id ? tool : t)) : [...tools, tool]);
     closeDialog();
@@ -149,7 +163,8 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
             + Add tool
           </button>
           {menu ? (
-            <AddMenu onClient={() => openNew("client")} onServer={() => openNew("webhook")} onClose={() => setMenu(false)} />
+            <AddMenu onClient={() => openNew("client")} onServer={() => openNew("webhook")} onClose={() => setMenu(false)}
+              onConnector={features.connectors ? () => { setMenu(false); setConnector({ tool: null }); } : undefined} />
           ) : null}
         </div>
       </div>
@@ -229,6 +244,19 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
                 ))}
               </ToolGroup>
             ) : null}
+            {connectors.length ? (
+              <ToolGroup label="Connectors">
+                {connectors.map((t) => (
+                  <ToolRow
+                    key={t.id}
+                    tool={t}
+                    onToggle={(v) => setEnabled(t, v)}
+                    onEdit={features.connectors ? () => setConnector({ tool: t }) : undefined}
+                    onDelete={() => remove(t)}
+                  />
+                ))}
+              </ToolGroup>
+            ) : null}
           </>
         )}
       </SectionCard>
@@ -244,13 +272,16 @@ export default function ToolsTab({ f }: { f: AgentForm }) {
           onClose={closeDialog}
         />
       ) : null}
+      {connector ? <ConnectorDialog tool={connector.tool} allTools={tools} onSave={saveTool} onClose={closeDialog} /> : null}
     </>
   );
 }
 
 /* ------------------------------------------------------------------ */
 
-function AddMenu({ onClient, onServer, onClose }: { onClient: () => void; onServer: () => void; onClose: () => void }) {
+function AddMenu({ onClient, onServer, onConnector, onClose }: {
+  onClient: () => void; onServer: () => void; onConnector?: () => void; onClose: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>("button:not([disabled])")?.focus();
@@ -282,12 +313,22 @@ function AddMenu({ onClient, onServer, onClose }: { onClient: () => void; onServ
           Server tool<span className="lb-menu-sub">Calls an external endpoint</span>
         </span>
       </button>
+      {onConnector ? (
+        <button type="button" role="menuitem" onClick={onConnector}>
+          <span className="lb-menu-icon">
+            <PlugIcon />
+          </span>
+          <span className="lb-menu-text">
+            Connector<span className="lb-menu-sub">Uses an app you connect</span>
+          </span>
+        </button>
+      ) : null}
     </div>
   );
 }
 
 function toolDescription(tool: Tool): string {
-  if (isCustom(tool)) return tool.description;
+  if (isCustom(tool) || isConnector(tool)) return tool.description;
   return tool.type === "system" ? (SYSTEM_TOOLS[tool.name] ?? "") : "";
 }
 

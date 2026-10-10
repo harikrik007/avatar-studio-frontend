@@ -3,15 +3,15 @@
 import { useEffect, useState } from "react";
 
 /** Features the signed-in account may see (app/api/features): asked once per page load; everything off until the answer comes. */
-export type Features = { voiceIsolation: boolean };
+export type Features = { voiceIsolation: boolean; connectors: boolean };
 
-const NONE: Features = { voiceIsolation: false };
+const NONE: Features = { voiceIsolation: false, connectors: false };
 let pending: Promise<Features> | null = null;
 
 function load(): Promise<Features> {
   pending ??= fetch("/api/features", { cache: "no-store" })
     .then((r) => (r.ok ? r.json() : NONE))
-    .then((f) => ({ voiceIsolation: f?.voiceIsolation === true }))
+    .then((f) => ({ voiceIsolation: f?.voiceIsolation === true, connectors: f?.connectors === true }))
     .catch(() => NONE);
   return pending;
 }

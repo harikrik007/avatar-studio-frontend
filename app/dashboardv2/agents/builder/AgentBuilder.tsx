@@ -19,7 +19,7 @@ import { voiceById, voiceName } from "@/lib/voices";
 import { Spinner } from "../../ui";
 import { LiveTestPanel, avatarLabel } from "../shared";
 import { useAgentForm, type AgentForm } from "../useAgentForm";
-import { isCustom } from "@/lib/tools/model";
+import { isConnector, isCustom } from "@/lib/tools/model";
 import { AdvancedTab, AvatarTab, Chevron, EmbedTab, PromptTab, VoiceTab } from "./tabs";
 import ToolsTab from "./tools/ToolsTab";
 
@@ -167,7 +167,7 @@ export default function AgentBuilder({ agentId }: { agentId?: string }) {
     prompt: Boolean(f.form.name.trim()),
     avatar: Boolean(f.form.avatarId),
     voice: Boolean(f.form.voice),
-    tools: f.form.tools.some(isCustom),
+    tools: f.form.tools.some((t) => isCustom(t) || isConnector(t)),
     embed: false,
     advanced: false,
   };
@@ -479,7 +479,7 @@ function PreviewPanel({
           </button>
           <button type="button" className="lb-chip" onClick={() => onJump("tools")}>
             <span className="lb-chip-label">Tools</span>
-            <span className="lb-chip-value">{f.form.tools.filter(isCustom).length}</span>
+            <span className="lb-chip-value">{f.form.tools.filter((t) => isCustom(t) || isConnector(t)).length}</span>
           </button>
           <button type="button" className="lb-chip" onClick={() => onJump(f.isCreate ? "prompt" : "advanced")}>
             <span className="lb-chip-label">Status</span>

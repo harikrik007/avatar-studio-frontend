@@ -66,11 +66,21 @@ export type ClientTool = BaseTool & {
 
 export type KnowledgeTool = BaseTool & { type: "server"; subtype: "knowledge"; document_ids: string[] };
 
+/** One action of an app the agent's owner has connected (a calendar, a mailbox, a sheet). `parameters` holds only what the
+ * owner lets the agent fill in; `fixed` holds the values the owner has set, which the agent never sees or changes. */
+export type ConnectorTool = BaseTool & {
+  type: "server";
+  subtype: "connector";
+  app: string; // "googlecalendar"
+  action: string; // "GOOGLECALENDAR_FIND_FREE_SLOTS"
+  fixed: Record<string, unknown>;
+};
+
 export type SystemTool = { id: string; type: "system"; name: string; enabled: boolean };
 
-export type Tool = WebhookTool | ClientTool | KnowledgeTool | SystemTool;
+export type Tool = WebhookTool | ClientTool | KnowledgeTool | ConnectorTool | SystemTool;
 export type CustomTool = WebhookTool | ClientTool;
-export type ToolKind = "webhook" | "client" | "knowledge" | "system";
+export type ToolKind = "webhook" | "client" | "knowledge" | "connector" | "system";
 
 export const METHODS: HttpMethod[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 export const DATA_TYPES: { id: ToolDataType; label: string }[] = [
@@ -95,13 +105,21 @@ export const NAME_RE = /^[a-zA-Z0-9_.-]{1,64}$/;
 export const PARAM_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 const TOKEN_RE = /\{(\w+)\}/g;
+const CONNECTOR_APP_RE = /^[a-z0-9_-]{2,64}$/;
+const CONNECTOR_ACTION_RE = /^[A-Z][A-Z0-9_]{2,119}$/;
+const CONNECTOR_FIXED_MAX_CHARS = 2000;
 export const CLIENT_TIMEOUT_DEFAULT_S = 10;
 export const MASK_PREFIX = "••••";
 
 export function toolKind(tool: Tool): ToolKind {
   if (tool.type === "system") return "system";
   if (tool.type === "client") return "client";
+  if (tool.subtype === "connector") return "connector";
   return tool.subtype === "knowledge" ? "knowledge" : "webhook";
+}
+
+export function isConnector(tool: Tool): tool is ConnectorTool {
+  return toolKind(tool) === "connector";
 }
 
 export function isCustom(tool: Tool): tool is CustomTool {
@@ -160,6 +178,18 @@ export function newClientTool(): ClientTool {
 /** Defaults and the await/interruptible coupling -- same as normalize() in model.py. */
 export function normalize<T extends Tool>(tool: T): T {
   if (tool.type === "system") return tool;
+  if (isConnector(tool)) {
+    const c = { ...tool } as ConnectorTool;
+    c.name = (c.name ?? "").trim();
+    c.description = (c.description ?? "").trim();
+    c.enabled = c.enabled ?? true;
+    if (!c.parameters || typeof c.parameters !== "object") c.parameters = emptySchema();
+    c.app = (c.app ?? "").trim().toLowerCase();
+    c.action = (c.action ?? "").trim().toUpperCase();
+    c.fixed = c.fixed && typeof c.fixed === "object" && !Array.isArray(c.fixed) ? { ...c.fixed } : {};
+    c.interruptible = c.interruptible ?? true;
+    return c as unknown as T;
+  }
   const t = { ...tool } as CustomTool;
   t.name = (t.name ?? "").trim();
   t.description = (t.description ?? "").trim();
@@ -261,7 +291,7 @@ export function validateTool(tool: Tool, opts: { storedUrl?: string | null } = {
     return errors;
   }
   if (k === "knowledge") return ["Knowledge tools aren't available yet."];
-  const t = tool as CustomTool;
+  const t = tool as CustomTool | ConnectorTool;
   if (!NAME_RE.test(t.name)) errors.push("Use letters, numbers, underscores, dots or hyphens.");
   else if (t.name in SYSTEM_TOOLS) errors.push("An agent tool with this name already exists.");
   if (!t.description || t.description.length > 1024) errors.push("Tell the model when to use this tool.");
@@ -290,6 +320,19 @@ export function validateTool(tool: Tool, opts: { storedUrl?: string | null } = {
     }
     if (Object.values(w.param_in ?? {}).some((v) => v !== "query" && v !== "body")) {
       errors.push("Each parameter is sent in the query or the body.");
+    }
+  } else if (k === "connector") {
+    const c = t as ConnectorTool;
+    if (!CONNECTOR_APP_RE.test(c.app ?? "")) errors.push("Pick an app.");
+    if (!CONNECTOR_ACTION_RE.test(c.action ?? "")) errors.push("Pick an action.");
+    const fixed = c.fixed as unknown;
+    if (!fixed || typeof fixed !== "object" || Array.isArray(fixed)) errors.push("Fixed values must be a list of names and values.");
+    else {
+      for (const name of Object.keys(fixed)) {
+        if (!PARAM_NAME_RE.test(name)) errors.push(`Parameter names must start with a letter (${name}).`);
+        else if (name in props) errors.push(`${name} has a fixed value, so the agent can't also fill it in.`);
+      }
+      if (JSON.stringify(fixed).length > CONNECTOR_FIXED_MAX_CHARS) errors.push("The fixed values are too long.");
     }
   } else {
     const c = t as ClientTool;
@@ -412,6 +455,7 @@ export function toolTypeChip(tool: Tool): string {
   if (k === "webhook") return `SERVER · ${(tool as WebhookTool).method}`;
   if (k === "client") return "CLIENT";
   if (k === "knowledge") return "KNOWLEDGE";
+  if (k === "connector") return "CONNECTOR";
   return "SYSTEM";
 }
 
